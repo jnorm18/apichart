@@ -450,7 +450,7 @@
       </div>
 
       <div class="projection-note" id="projectionNote">
-        Defaults follow the uploaded table spec: total 2030 capacity is estimated from the average year-on-year change in total generation over the latest up to 3 historical intervals, extended linearly to 2030, then distributed across technologies using latest capacity shares. In total-target mode, the 2030 total is also split across technologies using those latest capacity shares. Capacity factors default to each technology's latest observable implied value using the latest common year where both historical generation and capacity exist, and editable capacity factors are capped between 0 and 1. Generation projections are then anchored to the latest historical generation year for visual continuity.
+        Defaults follow the uploaded table spec: total 2030 capacity is estimated from the average year-on-year change in total generation over the latest up to 3 historical intervals, extended linearly to 2030, then distributed across technologies using latest capacity shares. In total-target mode, the 2030 total is also split across technologies using those latest capacity shares. Capacity factors default to each technology's latest observable implied value using the latest common year where both historical generation and capacity exist, and editable capacity factors are capped between 0 and 1. Generation projections are then scaled from a 2025-style anchor value so the projected path stays continuous without forcing the first projected year to equal the last historical year.
       </div>
     </section>
 
@@ -1261,11 +1261,13 @@
         if (historicalType.kind === "generation") {
           const anchorYear = historicalType.latestYear;
           const anchorValue = Number(historicalType.valuesBySeries.get(row.technology)?.get(anchorYear) ?? 0);
-          const firstProjectedValue = Number(rawValues[0] ?? 0);
+          const anchorCap = interpolateLinearToTarget(capBaseYear, capStartValue, capTarget, anchorYear);
+          const anchorCf = interpolateLinearToTarget(cfBaseYear, cfStart, cfTarget, anchorYear);
+          const anchorProjectedValue = Math.max(0, anchorCap) * clamp(anchorCf, 0, 1) * 8.76;
 
           let scaleFactor = 1;
-          if (firstProjectedValue > 0) {
-            scaleFactor = Math.max(0, anchorValue) / firstProjectedValue;
+          if (anchorProjectedValue > 0) {
+            scaleFactor = Math.max(0, anchorValue) / anchorProjectedValue;
           } else if (anchorValue === 0) {
             scaleFactor = 1;
           } else {
