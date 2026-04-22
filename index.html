@@ -137,6 +137,14 @@
       line-height: 1.5;
     }
 
+    .chart-meta {
+      min-height: 22px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
     .status {
       margin: 10px 2px 0;
       min-height: 24px;
@@ -219,16 +227,18 @@
     <section class="charts-grid">
       <section class="card chart-card">
         <div id="generationChart" class="chart"></div>
+        <div id="generationMeta" class="chart-meta"></div>
       </section>
 
       <section class="card chart-card">
         <div id="capacityChart" class="chart"></div>
+        <div id="capacityMeta" class="chart-meta"></div>
       </section>
     </section>
 
     <p class="footer-note">
-      Left chart: annual electricity generation. Right chart: installed capacity annualised from Ember's monthly installed-capacity dataset,
-      using the latest available month in each year. The capacity chart is limited to the non-aggregate wind and solar series returned by Ember.
+      Left chart: annual electricity generation. Right chart: annual snapshots from Ember's monthly installed-capacity dataset,
+      using the latest available month in each year. Ember's current installed-capacity endpoint covers wind and solar capacity rather than a full all-fuels capacity mix.
     </p>
   </div>
 
@@ -267,6 +277,8 @@
     const statusEl = document.getElementById("status");
     const generationChartEl = document.getElementById("generationChart");
     const capacityChartEl = document.getElementById("capacityChart");
+    const generationMetaEl = document.getElementById("generationMeta");
+    const capacityMetaEl = document.getElementById("capacityMeta");
 
     let countriesLoadedForKey = null;
     let loadCountriesTimer = null;
@@ -362,9 +374,15 @@
       chartEl.innerHTML = "";
     }
 
+    function clearMeta() {
+      generationMetaEl.textContent = "";
+      capacityMetaEl.textContent = "";
+    }
+
     function clearCharts() {
       clearChart(generationChartEl);
       clearChart(capacityChartEl);
+      clearMeta();
     }
 
     function showChartMessage(chartEl, message) {
@@ -549,14 +567,15 @@
         paper_bgcolor: "#ffffff",
         plot_bgcolor: "#ffffff",
         hovermode: "x unified",
-        margin: { l: 62, r: 18, t: 68, b: 62 },
+        margin: { l: 62, r: 18, t: 68, b: 42 },
         legend: {
           orientation: "h",
           x: 0,
           xanchor: "left",
-          y: -0.18,
+          y: -0.14,
           yanchor: "top",
-          traceorder: "reversed"
+          traceorder: "reversed",
+          font: { size: 11 }
         },
         xaxis: {
           title: "",
@@ -569,22 +588,11 @@
           rangemode: "tozero",
           gridcolor: "#e7edf5",
           zeroline: false
-        },
-        annotations: [
-          {
-            xref: "paper",
-            yref: "paper",
-            x: 0,
-            y: -0.31,
-            showarrow: false,
-            align: "left",
-            text: `Latest year in returned series: ${latestYear}`,
-            font: { size: 12, color: "#5a6b85" }
-          }
-        ]
+        }
       };
 
       await Plotly.react(generationChartEl, traces, layout, commonChartConfig());
+      generationMetaEl.textContent = `Latest year in returned series: ${latestYear}`;
       return `Generation: ${transformed.rowCount} non-aggregate records across ${transformed.seriesNames.length} series.`;
     }
 
@@ -619,7 +627,7 @@
       const latestMonth = transformed.latestMonthByYear.get(latestYear) || latestYear;
       const layout = {
         title: {
-          text: `Installed capacity in ${country}<br><sup>Gigawatts, annualised from monthly data</sup>`,
+          text: `Wind and solar capacity in ${country}<br><sup>Gigawatts, annual snapshots from monthly Ember data</sup>`,
           x: 0,
           xanchor: "left",
           font: { size: 16 }
@@ -627,14 +635,15 @@
         paper_bgcolor: "#ffffff",
         plot_bgcolor: "#ffffff",
         hovermode: "x unified",
-        margin: { l: 62, r: 18, t: 68, b: 62 },
+        margin: { l: 62, r: 18, t: 68, b: 42 },
         legend: {
           orientation: "h",
           x: 0,
           xanchor: "left",
-          y: -0.18,
+          y: -0.14,
           yanchor: "top",
-          traceorder: "reversed"
+          traceorder: "reversed",
+          font: { size: 11 }
         },
         xaxis: {
           title: "",
@@ -647,22 +656,11 @@
           rangemode: "tozero",
           gridcolor: "#e7edf5",
           zeroline: false
-        },
-        annotations: [
-          {
-            xref: "paper",
-            yref: "paper",
-            x: 0,
-            y: -0.31,
-            showarrow: false,
-            align: "left",
-            text: `Latest month used for the latest year: ${latestMonth}`,
-            font: { size: 12, color: "#5a6b85" }
-          }
-        ]
+        }
       };
 
       await Plotly.react(capacityChartEl, traces, layout, commonChartConfig());
+      capacityMetaEl.textContent = `Latest month used for the latest year: ${latestMonth}`;
       return `Capacity: ${transformed.rowCount} monthly non-aggregate records annualised into ${transformed.seriesNames.length} series.`;
     }
 
@@ -768,6 +766,7 @@
       } else {
         hasFailure = true;
         console.error(generationResult.reason);
+        generationMetaEl.textContent = "";
         showChartMessage(generationChartEl, generationResult.reason?.message || "Could not load generation chart.");
         messages.push(`Generation chart issue: ${generationResult.reason?.message || "Unknown error."}`);
       }
@@ -778,6 +777,7 @@
       } else {
         hasFailure = true;
         console.error(capacityResult.reason);
+        capacityMetaEl.textContent = "";
         showChartMessage(capacityChartEl, capacityResult.reason?.message || "Could not load capacity chart.");
         messages.push(`Capacity chart issue: ${capacityResult.reason?.message || "Unknown error."}`);
       }
