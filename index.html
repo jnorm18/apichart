@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Electricity generation explorer</title>
+  <title>Electricity generation and capacity explorer</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     :root {
       --bg: #f6f8fb;
@@ -27,7 +28,7 @@
     }
 
     .page {
-      max-width: 1400px;
+      max-width: 1420px;
       margin: 0 auto;
       padding: 24px;
     }
@@ -45,7 +46,7 @@
     .subhead {
       margin: 0;
       color: var(--muted);
-      max-width: 860px;
+      max-width: 900px;
       line-height: 1.5;
     }
 
@@ -175,6 +176,13 @@
       font-weight: 600;
     }
 
+    code.inline-code {
+      background: #eef4fb;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.92em;
+    }
+
     @media (max-width: 1100px) {
       .charts-grid {
         grid-template-columns: 1fr;
@@ -190,11 +198,11 @@
 <body>
   <div class="page">
     <div class="header">
-      <div class="pill">V1.2 • Ember API generation + capacity</div>
-      <h1>Electricity generation explorer</h1>
+      <div class="pill">V1.3 • Ember API generation + local yearly capacity file</div>
+      <h1>Electricity generation and capacity explorer</h1>
       <p class="subhead">
-        Paste your Ember API key and the country list will load automatically. Both charts update automatically
-        when you change the country or start year.
+        Generation is pulled from Ember's API. Capacity is pulled from a local file in your repo. Both charts update
+        automatically when you change the country or start year.
       </p>
     </div>
 
@@ -237,8 +245,11 @@
     </section>
 
     <p class="footer-note">
-      Left chart: annual electricity generation. Right chart: annual snapshots from Ember's monthly installed-capacity dataset,
-      using the latest available month in each year. Ember's current installed-capacity endpoint covers wind and solar capacity rather than a full all-fuels capacity mix.
+      Repo setup for the capacity chart: add a file at <code class="inline-code">data/capacity_yearly.csv</code>.
+      Minimal fields needed are <code class="inline-code">Area</code>, <code class="inline-code">Year</code>,
+      <code class="inline-code">Variable</code>, and <code class="inline-code">Value</code>. If your source file still includes
+      aggregates, also keep <code class="inline-code">Subcategory</code> and set fuel-level rows to <code class="inline-code">Fuel</code>.
+      Optional but helpful: <code class="inline-code">ISO 3 code</code>.
     </p>
   </div>
 
@@ -246,6 +257,7 @@
     const API_BASE = "https://api.ember-energy.org/v1";
     const STORAGE_KEY = "ember_api_key";
     const DEFAULT_COUNTRY = "China";
+    const CAPACITY_DATA_PATH = "./data/capacity_yearly.csv";
 
     const SERIES_ORDER = [
       "Other fossil",
@@ -258,6 +270,23 @@
       "Solar",
       "Other renewables"
     ];
+
+    const SERIES_ALIASES = {
+      "other fossil": "Other fossil",
+      "fossil": "Other fossil",
+      "coal": "Coal",
+      "gas": "Gas",
+      "gas and other fossil": "Gas",
+      "other fossil fuels": "Other fossil",
+      "nuclear": "Nuclear",
+      "bioenergy": "Bioenergy",
+      "hydro": "Hydro",
+      "hydropower": "Hydro",
+      "wind": "Wind",
+      "solar": "Solar",
+      "other renewables": "Other renewables",
+      "hydro, bioenergy and other renewables": "Other renewables"
+    };
 
     const SERIES_COLORS = {
       "Solar": "#2dd4bf",
@@ -285,6 +314,7 @@
     let loadChartsTimer = null;
     let latestCountriesRequestId = 0;
     let latestChartsRequestId = 0;
+    let capacityDataPromise = null;
 
     apiKeyInput.value = localStorage.getItem(STORAGE_KEY) || "";
 
@@ -311,6 +341,32 @@
         throw new Error(`Request failed (${response.status}). ${body.slice(0, 180)}`);
       }
       return response.json();
+    }
+
+    async function fetchCsvRows(path) {
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Could not load local capacity file at ${path}.`);
+      }
+      const text = await response.text();
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false
+      });
+
+      if (parsed.errors?.length) {
+        throw new Error(`Could not parse capacity CSV. ${parsed.errors[0].message}`);
+      }
+
+      return Array.isArray(parsed.data) ? parsed.data : [];
+    }
+
+    function loadCapacityData() {
+      if (!capacityDataPromise) {
+        capacityDataPromise = fetchCsvRows(CAPACITY_DATA_PATH);
+      }
+      return capacityDataPromise;
     }
 
     function extractOptionList(payload) {
@@ -394,6 +450,16 @@
       chartEl.appendChild(box);
     }
 
+    function cleanSeriesName(name) {
+      return String(name || "").trim();
+    }
+
+    function normaliseSeriesName(name) {
+      const cleaned = cleanSeriesName(name);
+      const alias = SERIES_ALIASES[cleaned.toLowerCase()];
+      return alias || cleaned;
+    }
+
     function seriesSortKey(name) {
       const index = SERIES_ORDER.findIndex((item) => item.toLowerCase() === String(name).toLowerCase());
       return index === -1 ? 999 : index;
@@ -409,8 +475,70 @@
       return foundKey ? SERIES_COLORS[foundKey] : "#7f8ea3";
     }
 
-    function cleanSeriesName(name) {
-      return String(name || "").trim();
+    function commonChartConfig() {
+      return {
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: [
+          "select2d",
+          "lasso2d",
+          "autoScale2d",
+          "toggleSpikelines"
+        ]
+      };
+    }
+
+    function buildStackedAreaTraces({ years, seriesNames, valuesBySeries, valueSuffix, decimals = 1 }) {
+      return seriesNames.map((name) => ({
+        type: "scatter",
+        mode: "lines",
+        name,
+        x: years,
+        y: years.map((year) => valuesBySeries.get(name).get(year)),
+        stackgroup: "stack",
+        line: {
+          width: 1,
+          color: seriesColor(name)
+        },
+        fillcolor: seriesColor(name),
+        hovertemplate: `%{fullData.name}<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
+      }));
+    }
+
+    function baseLayout(titleText, subtitleText) {
+      return {
+        title: {
+          text: `${titleText}<br><sup>${subtitleText}</sup>`,
+          x: 0,
+          xanchor: "left",
+          font: { size: 16 }
+        },
+        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#ffffff",
+        hovermode: "x unified",
+        margin: { l: 62, r: 18, t: 68, b: 42 },
+        legend: {
+          orientation: "h",
+          x: 0,
+          xanchor: "left",
+          y: -0.14,
+          yanchor: "top",
+          traceorder: "reversed",
+          font: { size: 11 }
+        },
+        xaxis: {
+          title: "",
+          tickmode: "auto",
+          showgrid: false,
+          zeroline: false
+        },
+        yaxis: {
+          title: "",
+          rangemode: "tozero",
+          gridcolor: "#e7edf5",
+          zeroline: false
+        }
+      };
     }
 
     function transformGenerationRows(rows) {
@@ -442,49 +570,39 @@
       };
     }
 
-    function transformCapacityRows(rows) {
-      const filteredRows = rows.filter((row) => row?.is_aggregate_series === false);
-      const latestByYearSeries = new Map();
+    function transformCapacityRows(rows, country, startYear) {
+      const startYearNum = Number(startYear);
+      const filteredRows = rows.filter((row) => {
+        const area = String(row.Area || row.area || "").trim();
+        const year = Number(row.Year || row.year);
+        const variable = normaliseSeriesName(row.Variable || row.variable || "");
+        const value = Number(row.Value || row.value);
+        const subcategory = String(row.Subcategory || row.subcategory || "").trim();
 
-      for (const row of filteredRows) {
-        const rawDate = String(row.date || "");
-        const year = rawDate.slice(0, 4);
-        const name = cleanSeriesName(row.series);
-        if (!year || !name) continue;
+        if (!area || area !== country) return false;
+        if (!Number.isFinite(year) || year < startYearNum) return false;
+        if (!variable) return false;
+        if (!Number.isFinite(value)) return false;
+        if (subcategory && subcategory.toLowerCase() !== "fuel") return false;
+        return true;
+      });
 
-        const key = `${year}__${name}`;
-        const current = latestByYearSeries.get(key);
-        if (!current || rawDate > current.date) {
-          latestByYearSeries.set(key, {
-            year,
-            date: rawDate,
-            name,
-            value: Number(row.capacity_gw ?? 0)
-          });
-        }
-      }
+      const years = [...new Set(filteredRows.map((row) => String(row.Year || row.year)))]
+        .sort((a, b) => Number(a) - Number(b));
 
-      const annualRows = Array.from(latestByYearSeries.values()).filter(
-        (row) => Number.isFinite(row.value)
-      );
-
-      const years = [...new Set(annualRows.map((row) => row.year))].sort();
-      const seriesNames = [...new Set(annualRows.map((row) => row.name))]
+      const seriesNames = [...new Set(filteredRows.map((row) => normaliseSeriesName(row.Variable || row.variable)).filter(Boolean))]
         .sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
       const valuesBySeries = new Map(
         seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))])
       );
-      const latestMonthByYear = new Map();
 
-      for (const row of annualRows) {
-        if (!valuesBySeries.has(row.name)) continue;
-        valuesBySeries.get(row.name).set(row.year, row.value);
-
-        const existingMonth = latestMonthByYear.get(row.year);
-        if (!existingMonth || row.date > existingMonth) {
-          latestMonthByYear.set(row.year, row.date);
-        }
+      for (const row of filteredRows) {
+        const year = String(row.Year || row.year);
+        const name = normaliseSeriesName(row.Variable || row.variable);
+        const value = Number(row.Value || row.value);
+        if (!valuesBySeries.has(name)) continue;
+        valuesBySeries.get(name).set(year, Number.isFinite(value) ? value : 0);
       }
 
       return {
@@ -494,38 +612,7 @@
           return values.some((value) => value !== 0);
         }),
         valuesBySeries,
-        rowCount: filteredRows.length,
-        latestMonthByYear
-      };
-    }
-
-    function buildStackedAreaTraces({ years, seriesNames, valuesBySeries, valueSuffix, decimals = 1 }) {
-      return seriesNames.map((name) => ({
-        type: "scatter",
-        mode: "lines",
-        name,
-        x: years,
-        y: years.map((year) => valuesBySeries.get(name).get(year)),
-        stackgroup: "stack",
-        line: {
-          width: 1,
-          color: seriesColor(name)
-        },
-        fillcolor: seriesColor(name),
-        hovertemplate: `%{fullData.name}<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
-      }));
-    }
-
-    function commonChartConfig() {
-      return {
-        responsive: true,
-        displaylogo: false,
-        modeBarButtonsToRemove: [
-          "select2d",
-          "lasso2d",
-          "autoScale2d",
-          "toggleSpikelines"
-        ]
+        rowCount: filteredRows.length
       };
     }
 
@@ -557,62 +644,23 @@
       });
 
       const latestYear = transformed.years[transformed.years.length - 1];
-      const layout = {
-        title: {
-          text: `Electricity generation in ${country}<br><sup>Terawatt-hours</sup>`,
-          x: 0,
-          xanchor: "left",
-          font: { size: 16 }
-        },
-        paper_bgcolor: "#ffffff",
-        plot_bgcolor: "#ffffff",
-        hovermode: "x unified",
-        margin: { l: 62, r: 18, t: 68, b: 42 },
-        legend: {
-          orientation: "h",
-          x: 0,
-          xanchor: "left",
-          y: -0.14,
-          yanchor: "top",
-          traceorder: "reversed",
-          font: { size: 11 }
-        },
-        xaxis: {
-          title: "",
-          tickmode: "auto",
-          showgrid: false,
-          zeroline: false
-        },
-        yaxis: {
-          title: "",
-          rangemode: "tozero",
-          gridcolor: "#e7edf5",
-          zeroline: false
-        }
-      };
+      const layout = baseLayout(`Electricity generation in ${country}`, "Terawatt-hours");
 
       await Plotly.react(generationChartEl, traces, layout, commonChartConfig());
       generationMetaEl.textContent = `Latest year in returned series: ${latestYear}`;
       return `Generation: ${transformed.rowCount} non-aggregate records across ${transformed.seriesNames.length} series.`;
     }
 
-    async function renderCapacityChart(country, startYear, apiKey) {
-      const payload = await fetchJson("/installed-capacity/monthly", {
-        entity: country,
-        start_date: `${startYear}-01`,
-        is_aggregate_series: false,
-        include_all_dates_value_range: true,
-        api_key: apiKey
-      });
+    async function renderCapacityChart(country, startYear) {
+      const rows = await loadCapacityData();
+      const transformed = transformCapacityRows(rows, country, startYear);
 
-      const rows = Array.isArray(payload?.data) ? payload.data : [];
-      if (!rows.length) {
-        throw new Error(`No installed-capacity rows were returned for ${country}.`);
+      if (!transformed.rowCount) {
+        throw new Error(`No local yearly capacity rows matched ${country}. Check the country names in your CSV.`);
       }
 
-      const transformed = transformCapacityRows(rows);
       if (!transformed.seriesNames.length) {
-        throw new Error(`No usable non-aggregate capacity series were returned for ${country}.`);
+        throw new Error(`No usable capacity series were found for ${country}.`);
       }
 
       const traces = buildStackedAreaTraces({
@@ -624,44 +672,11 @@
       });
 
       const latestYear = transformed.years[transformed.years.length - 1];
-      const latestMonth = transformed.latestMonthByYear.get(latestYear) || latestYear;
-      const layout = {
-        title: {
-          text: `Wind and solar capacity in ${country}<br><sup>Gigawatts, annual snapshots from monthly Ember data</sup>`,
-          x: 0,
-          xanchor: "left",
-          font: { size: 16 }
-        },
-        paper_bgcolor: "#ffffff",
-        plot_bgcolor: "#ffffff",
-        hovermode: "x unified",
-        margin: { l: 62, r: 18, t: 68, b: 42 },
-        legend: {
-          orientation: "h",
-          x: 0,
-          xanchor: "left",
-          y: -0.14,
-          yanchor: "top",
-          traceorder: "reversed",
-          font: { size: 11 }
-        },
-        xaxis: {
-          title: "",
-          tickmode: "auto",
-          showgrid: false,
-          zeroline: false
-        },
-        yaxis: {
-          title: "",
-          rangemode: "tozero",
-          gridcolor: "#e7edf5",
-          zeroline: false
-        }
-      };
+      const layout = baseLayout(`Installed capacity in ${country}`, "Gigawatts");
 
       await Plotly.react(capacityChartEl, traces, layout, commonChartConfig());
-      capacityMetaEl.textContent = `Latest month used for the latest year: ${latestMonth}`;
-      return `Capacity: ${transformed.rowCount} monthly non-aggregate records annualised into ${transformed.seriesNames.length} series.`;
+      capacityMetaEl.textContent = `Latest year in local capacity file: ${latestYear}`;
+      return `Capacity: ${transformed.rowCount} yearly records across ${transformed.seriesNames.length} series.`;
     }
 
     async function loadCountries() {
@@ -751,7 +766,7 @@
 
       const [generationResult, capacityResult] = await Promise.allSettled([
         renderGenerationChart(country, startYear, apiKey),
-        renderCapacityChart(country, startYear, apiKey)
+        renderCapacityChart(country, startYear)
       ]);
 
       if (requestId !== latestChartsRequestId) return;
