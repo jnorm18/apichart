@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Electricity Generation Explorer</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #17233a;
+      --muted: #5a6b85;
+      --border: #d8e0eb;
+      --accent: #2b6cb0;
+      --danger: #c53030;
+      --shadow: 0 10px 30px rgba(23, 35, 58, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.7rem, 2vw, 2.3rem);
+      line-height: 1.1;
+    }
+
+    .subhead {
+      margin: 0;
+      color: var(--muted);
+      max-width: 780px;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .field small {
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-3 { grid-column: span 3; }
+    .span-2 { grid-column: span 2; }
+    .span-12 { grid-column: span 12; }
+
+    input,
+    select,
+    button {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      min-height: 46px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid rgba(43, 108, 176, 0.18);
+      border-color: var(--accent);
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--text);
+    }
+
+    button:disabled,
+    select:disabled,
+    input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      align-items: end;
+      height: 100%;
+    }
+
+    .chart-card {
+      padding: 14px 14px 4px;
+    }
+
+    #chart {
+      width: 100%;
+      min-height: 620px;
+    }
+
+    .status {
+      margin: 10px 2px 0;
+      min-height: 24px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #eef4fb;
+      color: #234e7d;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 900px) {
+      .span-4, .span-3, .span-2 { grid-column: span 12; }
+      .button-row { flex-direction: column; align-items: stretch; }
+      #chart { min-height: 520px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="pill">V1 • Ember API annual generation</div>
+      <h1>Electricity generation explorer</h1>
+      <p class="subhead">
+        Select a country and draw a stacked annual generation chart using Ember's yearly electricity-generation endpoint.
+        Your API key is stored locally in your browser so you do not need to commit it to GitHub.
+      </p>
+    </div>
+
+    <section class="card controls">
+      <div class="field span-4">
+        <label for="apiKey">Ember API key</label>
+        <input id="apiKey" type="password" placeholder="Paste your API key" autocomplete="off" />
+        <small>Saved in your browser only. It is not written into the repository.</small>
+      </div>
+
+      <div class="field span-4">
+        <label for="countrySelect">Country or region</label>
+        <select id="countrySelect" disabled>
+          <option value="">Load countries first</option>
+        </select>
+        <small>The dropdown is populated from Ember's options endpoint.</small>
+      </div>
+
+      <div class="field span-2">
+        <label for="startYear">Start year</label>
+        <input id="startYear" type="number" min="1900" max="2100" step="1" value="2000" />
+        <small>Default matches Ember's yearly endpoint.</small>
+      </div>
+
+      <div class="field span-2">
+        <label>&nbsp;</label>
+        <div class="button-row">
+          <button id="loadCountriesBtn">Load countries</button>
+          <button id="refreshBtn" class="secondary" disabled>Draw chart</button>
+        </div>
+      </div>
+
+      <div class="field span-12">
+        <div id="status" class="status">Enter your API key, then load the country list.</div>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <div id="chart"></div>
+    </section>
+
+    <p class="footer-note">
+      Data source: Ember API. Ember states that its data is published under CC-BY-4.0 and asks that Ember is cited as the source.
+      If the browser blocks direct API calls from GitHub Pages because of CORS, the next step would be to add a lightweight proxy.
+    </p>
+  </div>
+
+  <script>
+    const API_BASE = "https://api.ember-energy.org/v1";
+    const STORAGE_KEY = "ember_api_key";
+    const DEFAULT_COUNTRY = "China";
+
+    const SERIES_ORDER = [
+      "Other fossil",
+      "Coal",
+      "Gas",
+      "Nuclear",
+      "Bioenergy",
+      "Hydro",
+      "Wind",
+      "Solar",
+      "Other renewables"
+    ];
+
+    const SERIES_COLORS = {
+      "Solar": "#2dd4bf",
+      "Wind": "#0f7a3c",
+      "Hydro": "#8ec5f2",
+      "Bioenergy": "#2b6cb0",
+      "Nuclear": "#1f3b73",
+      "Gas": "#a58a87",
+      "Coal": "#6b4c43",
+      "Other fossil": "#cfc7c3",
+      "Other renewables": "#54d38f"
+    };
+
+    const SERIES_EXCLUDE = new Set([
+      "Total",
+      "Generation",
+      "Fossil",
+      "Renewables",
+      "Clean electricity",
+      "Low-carbon"
+    ]);
+
+    const apiKeyInput = document.getElementById("apiKey");
+    const countrySelect = document.getElementById("countrySelect");
+    const startYearInput = document.getElementById("startYear");
+    const loadCountriesBtn = document.getElementById("loadCountriesBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const statusEl = document.getElementById("status");
+    const chartEl = document.getElementById("chart");
+
+    apiKeyInput.value = localStorage.getItem(STORAGE_KEY) || "";
+
+    apiKeyInput.addEventListener("change", () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem(STORAGE_KEY, key);
+        setStatus("API key saved in this browser.");
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+        setStatus("API key cleared.");
+      }
+    });
+
+    loadCountriesBtn.addEventListener("click", loadCountries);
+    refreshBtn.addEventListener("click", loadChart);
+    countrySelect.addEventListener("change", loadChart);
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function getApiKey() {
+      const key = apiKeyInput.value.trim();
+      if (!key) {
+        setStatus("Please enter your Ember API key first.", true);
+        return null;
+      }
+      localStorage.setItem(STORAGE_KEY, key);
+      return key;
+    }
+
+    function buildUrl(path, params) {
+      const url = new URL(`${API_BASE}${path}`);
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          url.searchParams.set(key, value);
+        }
+      });
+      return url.toString();
+    }
+
+    async function fetchJson(path, params) {
+      const url = buildUrl(path, params);
+      const response = await fetch(url);
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Request failed (${response.status}). ${body.slice(0, 180)}`);
+      }
+      return response.json();
+    }
+
+    function extractOptionList(payload) {
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (Array.isArray(payload?.options)) return payload.options;
+      if (Array.isArray(payload?.values)) return payload.values;
+      if (payload && typeof payload === "object") {
+        const arrayLike = Object.values(payload).find((value) => Array.isArray(value));
+        if (Array.isArray(arrayLike)) return arrayLike;
+      }
+      return [];
+    }
+
+    function normaliseOption(option) {
+      if (typeof option === "string") {
+        return { label: option, value: option };
+      }
+
+      const label = option.label || option.name || option.entity || option.value || option.title;
+      const value = option.value || option.entity || option.label || option.name || option.title;
+
+      return {
+        label: label ? String(label) : null,
+        value: value ? String(value) : null
+      };
+    }
+
+    function uniqueSortedOptions(rawOptions) {
+      const seen = new Set();
+      return rawOptions
+        .map(normaliseOption)
+        .filter((option) => option.label && option.value)
+        .filter((option) => {
+          const key = `${option.label}__${option.value}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a, b) => a.label.localeCompare(b.label));
+    }
+
+    async function loadCountries() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+
+      loadCountriesBtn.disabled = true;
+      refreshBtn.disabled = true;
+      countrySelect.disabled = true;
+      setStatus("Loading countries from Ember...");
+
+      try {
+        const payload = await fetchJson("/options/electricity-generation/yearly/entity", { api_key: apiKey });
+        const options = uniqueSortedOptions(extractOptionList(payload));
+
+        if (!options.length) {
+          throw new Error("No country options were returned. The options response format may be different than expected.");
+        }
+
+        countrySelect.innerHTML = "";
+        for (const option of options) {
+          const el = document.createElement("option");
+          el.value = option.value;
+          el.textContent = option.label;
+          if (option.label === DEFAULT_COUNTRY || option.value === DEFAULT_COUNTRY) {
+            el.selected = true;
+          }
+          countrySelect.appendChild(el);
+        }
+
+        countrySelect.disabled = false;
+        refreshBtn.disabled = false;
+        setStatus(`Loaded ${options.length} countries/regions. Drawing the chart...`);
+        await loadChart();
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message, true);
+      } finally {
+        loadCountriesBtn.disabled = false;
+      }
+    }
+
+    function seriesSortKey(name) {
+      const index = SERIES_ORDER.findIndex((item) => item.toLowerCase() === name.toLowerCase());
+      return index === -1 ? 999 : index;
+    }
+
+    function seriesColor(name) {
+      const exact = SERIES_COLORS[name];
+      if (exact) return exact;
+
+      const foundKey = Object.keys(SERIES_COLORS).find(
+        (key) => key.toLowerCase() === String(name).toLowerCase()
+      );
+      return foundKey ? SERIES_COLORS[foundKey] : "#7f8ea3";
+    }
+
+    function cleanSeriesName(name) {
+      return String(name || "").trim();
+    }
+
+    function shouldIncludeSeries(name) {
+      const cleaned = cleanSeriesName(name);
+      if (!cleaned) return false;
+      return ![...SERIES_EXCLUDE].some((value) => value.toLowerCase() === cleaned.toLowerCase());
+    }
+
+    function transformGenerationRows(rows) {
+      const years = [...new Set(rows.map((row) => String(row.date)))].sort();
+      const seriesNames = [...new Set(rows.map((row) => cleanSeriesName(row.series)).filter(shouldIncludeSeries))]
+        .sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+
+      const valuesBySeries = new Map(
+        seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))])
+      );
+
+      for (const row of rows) {
+        const year = String(row.date);
+        const name = cleanSeriesName(row.series);
+        if (!valuesBySeries.has(name)) continue;
+        const value = Number(row.generation_twh ?? 0);
+        valuesBySeries.get(name).set(year, Number.isFinite(value) ? value : 0);
+      }
+
+      return {
+        years,
+        seriesNames: seriesNames.filter((name) => {
+          const values = Array.from(valuesBySeries.get(name).values());
+          return values.some((value) => value !== 0);
+        }),
+        valuesBySeries
+      };
+    }
+
+    async function loadChart() {
+      const apiKey = getApiKey();
+      const country = countrySelect.value;
+      const startYear = startYearInput.value.trim() || "2000";
+
+      if (!apiKey || !country) return;
+
+      refreshBtn.disabled = true;
+      setStatus(`Loading annual generation data for ${country}...`);
+
+      try {
+        const payload = await fetchJson("/electricity-generation/yearly", {
+          entity: country,
+          start_date: startYear,
+          include_all_dates_value_range: true,
+          api_key: apiKey
+        });
+
+        const rows = Array.isArray(payload?.data) ? payload.data : [];
+        if (!rows.length) {
+          throw new Error(`No generation rows were returned for ${country}.`);
+        }
+
+        const transformed = transformGenerationRows(rows);
+        if (!transformed.seriesNames.length) {
+          throw new Error(`No usable generation series were returned for ${country}.`);
+        }
+
+        const traces = transformed.seriesNames.map((name) => ({
+          type: "scatter",
+          mode: "lines",
+          name,
+          x: transformed.years,
+          y: transformed.years.map((year) => transformed.valuesBySeries.get(name).get(year)),
+          stackgroup: "generation",
+          line: {
+            width: 1,
+            color: seriesColor(name)
+          },
+          fillcolor: seriesColor(name),
+          hovertemplate: `%{fullData.name}<br>%{x}: %{y:.1f} TWh<extra></extra>`
+        }));
+
+        const latestYear = transformed.years[transformed.years.length - 1];
+        const layout = {
+          title: {
+            text: `Electricity generation in ${country}<br><sup>Terawatt-hours</sup>`,
+            x: 0,
+            xanchor: "left",
+            font: { size: 18 }
+          },
+          paper_bgcolor: "#ffffff",
+          plot_bgcolor: "#ffffff",
+          hovermode: "x unified",
+          margin: { l: 70, r: 140, t: 70, b: 55 },
+          legend: {
+            orientation: "v",
+            x: 1.02,
+            xanchor: "left",
+            y: 1,
+            yanchor: "top",
+            traceorder: "reversed"
+          },
+          xaxis: {
+            title: "",
+            tickmode: "auto",
+            showgrid: false,
+            zeroline: false
+          },
+          yaxis: {
+            title: "",
+            rangemode: "tozero",
+            gridcolor: "#e7edf5",
+            zeroline: false
+          },
+          annotations: [
+            {
+              xref: "paper",
+              yref: "paper",
+              x: 0,
+              y: -0.18,
+              showarrow: false,
+              align: "left",
+              text: `Latest year in returned series: ${latestYear}`,
+              font: { size: 12, color: "#5a6b85" }
+            }
+          ]
+        };
+
+        const config = {
+          responsive: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: [
+            "select2d",
+            "lasso2d",
+            "autoScale2d",
+            "toggleSpikelines"
+          ]
+        };
+
+        await Plotly.newPlot(chartEl, traces, layout, config);
+        setStatus(`Showing ${country}. Returned ${rows.length} records across ${transformed.seriesNames.length} series.`);
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message, true);
+        Plotly.purge(chartEl);
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    }
+
+    if (apiKeyInput.value.trim()) {
+      setStatus("API key found in this browser. Click “Load countries” to begin.");
+    }
+  </script>
+</body>
+</html>
