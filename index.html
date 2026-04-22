@@ -198,11 +198,10 @@
 <body>
   <div class="page">
     <div class="header">
-      <div class="pill">V1.3 • Ember API generation + local yearly capacity file</div>
+      <div class="pill">V1.3.1 • Capacity chart fixed to use local yearly capacity rows only</div>
       <h1>Electricity generation and capacity explorer</h1>
       <p class="subhead">
-        Generation is pulled from Ember's API. Capacity is pulled from a local file in your repo. Both charts update
-        automatically when you change the country or start year.
+        Generation is pulled from Ember's API. Capacity is pulled from a local file in your repo and now filters specifically to yearly capacity rows only. Both charts update automatically when you change the country or start year.
       </p>
     </div>
 
@@ -246,10 +245,11 @@
 
     <p class="footer-note">
       Repo setup for the capacity chart: add a file at <code class="inline-code">data/capacity_yearly.csv</code>.
-      Minimal fields needed are <code class="inline-code">Area</code>, <code class="inline-code">Year</code>,
-      <code class="inline-code">Variable</code>, and <code class="inline-code">Value</code>. If your source file still includes
-      aggregates, also keep <code class="inline-code">Subcategory</code> and set fuel-level rows to <code class="inline-code">Fuel</code>.
-      Optional but helpful: <code class="inline-code">ISO 3 code</code>.
+      For a full Ember-style yearly file, the important columns are <code class="inline-code">Area</code>, <code class="inline-code">Year</code>,
+      <code class="inline-code">Category</code>, <code class="inline-code">Subcategory</code>, <code class="inline-code">Variable</code>,
+      <code class="inline-code">Unit</code>, and <code class="inline-code">Value</code>. The capacity chart now keeps only
+      <code class="inline-code">Category = Capacity</code>, <code class="inline-code">Subcategory = Fuel</code>, and
+      <code class="inline-code">Unit = GW</code>.
     </p>
   </div>
 
@@ -575,23 +575,28 @@
       const filteredRows = rows.filter((row) => {
         const area = String(row.Area || row.area || "").trim();
         const year = Number(row.Year || row.year);
+        const category = String(row.Category || row.category || "").trim();
+        const subcategory = String(row.Subcategory || row.subcategory || "").trim();
+        const unit = String(row.Unit || row.unit || "").trim();
         const variable = normaliseSeriesName(row.Variable || row.variable || "");
         const value = Number(row.Value || row.value);
-        const subcategory = String(row.Subcategory || row.subcategory || "").trim();
 
         if (!area || area !== country) return false;
         if (!Number.isFinite(year) || year < startYearNum) return false;
         if (!variable) return false;
         if (!Number.isFinite(value)) return false;
+        if (category && category.toLowerCase() !== "capacity") return false;
         if (subcategory && subcategory.toLowerCase() !== "fuel") return false;
+        if (unit && unit.toUpperCase() !== "GW") return false;
         return true;
       });
 
       const years = [...new Set(filteredRows.map((row) => String(row.Year || row.year)))]
         .sort((a, b) => Number(a) - Number(b));
 
-      const seriesNames = [...new Set(filteredRows.map((row) => normaliseSeriesName(row.Variable || row.variable)).filter(Boolean))]
-        .sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+      const seriesNames = [...new Set(
+        filteredRows.map((row) => normaliseSeriesName(row.Variable || row.variable)).filter(Boolean)
+      )].sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
       const valuesBySeries = new Map(
         seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))])
