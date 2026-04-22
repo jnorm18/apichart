@@ -16,6 +16,8 @@
       --accent: #2b6cb0;
       --danger: #c53030;
       --shadow: 0 10px 30px rgba(23, 35, 58, 0.08);
+      --proj-bg: #f8fafc;
+      --proj-band: rgba(100, 116, 139, 0.10);
     }
 
     * { box-sizing: border-box; }
@@ -28,14 +30,12 @@
     }
 
     .page {
-      max-width: 1420px;
+      max-width: 1480px;
       margin: 0 auto;
       padding: 24px;
     }
 
-    .header {
-      margin-bottom: 20px;
-    }
+    .header { margin-bottom: 20px; }
 
     h1 {
       margin: 0 0 8px;
@@ -46,7 +46,7 @@
     .subhead {
       margin: 0;
       color: var(--muted);
-      max-width: 900px;
+      max-width: 980px;
       line-height: 1.5;
     }
 
@@ -82,11 +82,11 @@
     }
 
     .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
     .span-3 { grid-column: span 3; }
     .span-12 { grid-column: span 12; }
 
-    input,
-    select {
+    input, select, button {
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px 14px;
@@ -96,16 +96,143 @@
       color: var(--text);
     }
 
-    input:focus,
-    select:focus {
+    input:focus, select:focus, button:focus {
       outline: 2px solid rgba(43, 108, 176, 0.18);
       border-color: var(--accent);
     }
 
-    select:disabled,
-    input:disabled {
+    select:disabled, input:disabled, button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      background: #f9fbff;
+    }
+
+    button:hover:not(:disabled) {
+      background: #f1f6fd;
+    }
+
+    .projection-card {
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .projection-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .projection-head h2 {
+      margin: 0 0 4px;
+      font-size: 1.1rem;
+    }
+
+    .projection-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 860px;
+    }
+
+    .projection-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .projection-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .summary-box {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: var(--proj-bg);
+    }
+
+    .summary-label {
+      font-size: 0.83rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .summary-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .projection-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    table.projection-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    .projection-table th,
+    .projection-table td {
+      border-bottom: 1px solid #edf2f7;
+      padding: 10px 10px;
+      text-align: left;
+      vertical-align: middle;
+      font-size: 0.92rem;
+    }
+
+    .projection-table th {
+      background: #f8fbff;
+      color: #234e7d;
+      font-size: 0.84rem;
+      text-transform: none;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .projection-table td.num,
+    .projection-table th.num {
+      text-align: right;
+    }
+
+    .projection-table input[type="number"] {
+      width: 120px;
+      min-height: 38px;
+      padding: 8px 10px;
+      text-align: right;
+      border-radius: 10px;
+    }
+
+    .projection-table input[readonly] {
+      background: #f8fafc;
+    }
+
+    .projection-table tfoot td {
+      font-weight: 700;
+      background: #fbfdff;
+    }
+
+    .projection-note {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
     }
 
     .charts-grid {
@@ -121,11 +248,11 @@
 
     .chart {
       width: 100%;
-      min-height: 560px;
+      min-height: 580px;
     }
 
     .chart-empty {
-      min-height: 560px;
+      min-height: 580px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -183,25 +310,32 @@
       font-size: 0.92em;
     }
 
+    .muted-inline {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
     @media (max-width: 1100px) {
-      .charts-grid {
-        grid-template-columns: 1fr;
-      }
+      .charts-grid { grid-template-columns: 1fr; }
+      .projection-summary { grid-template-columns: 1fr 1fr; }
     }
 
     @media (max-width: 900px) {
-      .span-6, .span-3 { grid-column: span 12; }
+      .span-6, .span-4, .span-3 { grid-column: span 12; }
       .chart, .chart-empty { min-height: 500px; }
+      .projection-summary { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="header">
-      <div class="pill">V1.3.1 • Capacity chart fixed to use local yearly capacity rows only</div>
+      <div class="pill">V2 beta • Historical data plus editable projections to 2030</div>
       <h1>Electricity generation and capacity explorer</h1>
       <p class="subhead">
-        Generation is pulled from Ember's API. Capacity is pulled from a local file in your repo and now filters specifically to yearly capacity rows only. Both charts update automatically when you change the country or start year.
+        Generation is pulled from Ember's API. Capacity is pulled from a local yearly file in your repo.
+        This version adds an editable 2030 projection panel and extends both charts beyond the latest historical year.
+        The projected section is shown with lighter fills and a shaded projection band.
       </p>
     </div>
 
@@ -223,11 +357,100 @@
       <div class="field span-3">
         <label for="startYear">Start year</label>
         <input id="startYear" type="number" min="1900" max="2100" step="1" value="2000" />
-        <small>Changing this refreshes both charts automatically.</small>
+        <small>Changing this refreshes the charts and projection defaults.</small>
       </div>
 
       <div class="field span-12">
         <div id="status" class="status">Enter your API key to load countries and draw the charts.</div>
+      </div>
+    </section>
+
+    <section class="card projection-card">
+      <div class="projection-head">
+        <div>
+          <h2>Projection settings to 2030</h2>
+          <p>
+            Edit the 2030 capacity and capacity factor assumptions below. Capacity between the latest historical year and 2030 is linearly interpolated.
+            Projected generation is then calculated as <code class="inline-code">capacity × capacity factor × 8.76</code>, with generation shown in TWh when capacity is in GW.
+          </p>
+        </div>
+        <button id="resetProjectionBtn" type="button" disabled>Reset defaults</button>
+      </div>
+
+      <div class="projection-grid">
+        <div class="field span-4">
+          <label for="projectionMode">Capacity target mode</label>
+          <select id="projectionMode" disabled>
+            <option value="per-tech">Per technology targets</option>
+            <option value="total-only">Single total target, distributed by latest capacity shares</option>
+          </select>
+          <small>Choose whether 2030 capacity is entered row by row or only as a total.</small>
+        </div>
+
+        <div class="field span-4">
+          <label for="totalCapacityTarget">Total capacity target in 2030 (GW)</label>
+          <input id="totalCapacityTarget" type="number" step="0.1" min="0" disabled />
+          <small>Used directly in total-only mode. In per-technology mode it updates automatically from row totals.</small>
+        </div>
+
+        <div class="field span-4">
+          <label>Projection year</label>
+          <input type="number" value="2030" disabled />
+          <small>This version fixes the forward projection endpoint at 2030.</small>
+        </div>
+      </div>
+
+      <div class="projection-summary" id="projectionSummary">
+        <div class="summary-box">
+          <div class="summary-label">Latest historical capacity year</div>
+          <div class="summary-value" id="summaryCapacityYear">-</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Latest historical generation year</div>
+          <div class="summary-value" id="summaryGenerationYear">-</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Default total 2030 capacity target</div>
+          <div class="summary-value" id="summaryDefaultTarget">-</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Average recent total generation growth used for default</div>
+          <div class="summary-value" id="summaryGrowth">-</div>
+        </div>
+      </div>
+
+      <div class="projection-table-wrap">
+        <table class="projection-table">
+          <thead>
+            <tr>
+              <th>Technology</th>
+              <th class="num">Latest capacity (GW)</th>
+              <th class="num">2030 capacity target (GW)</th>
+              <th class="num">% change to 2030</th>
+              <th class="num">Latest capacity factor</th>
+              <th class="num">2030 capacity factor</th>
+              <th class="num">% change to 2030</th>
+            </tr>
+          </thead>
+          <tbody id="projectionTableBody">
+            <tr><td colspan="7" class="muted-inline">Load a country to populate the projection table.</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>TOTAL</td>
+              <td class="num" id="totalLatestCapacityCell">-</td>
+              <td class="num" id="totalTargetCapacityCell">-</td>
+              <td class="num" id="totalCapacityPctCell">-</td>
+              <td class="num">-</td>
+              <td class="num">-</td>
+              <td class="num">-</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="projection-note" id="projectionNote">
+        Defaults follow the uploaded table spec: total 2030 capacity is estimated from the average year-on-year change in total generation over the latest up to 3 historical intervals, extended linearly to 2030, then distributed across technologies using latest capacity shares. Capacity factors default to each technology's latest observable implied value where both historical generation and capacity exist.
       </div>
     </section>
 
@@ -245,9 +468,9 @@
 
     <p class="footer-note">
       Repo setup for the capacity chart: add a file at <code class="inline-code">data/capacity_yearly.csv</code>.
-      For a full Ember-style yearly file, the important columns are <code class="inline-code">Area</code>, <code class="inline-code">Year</code>,
+      The important columns are <code class="inline-code">Area</code>, <code class="inline-code">Year</code>,
       <code class="inline-code">Category</code>, <code class="inline-code">Subcategory</code>, <code class="inline-code">Variable</code>,
-      <code class="inline-code">Unit</code>, and <code class="inline-code">Value</code>. The capacity chart now keeps only
+      <code class="inline-code">Unit</code>, and <code class="inline-code">Value</code>. This page keeps only
       <code class="inline-code">Category = Capacity</code>, <code class="inline-code">Subcategory = Fuel</code>, and
       <code class="inline-code">Unit = GW</code>.
     </p>
@@ -258,9 +481,11 @@
     const STORAGE_KEY = "ember_api_key";
     const DEFAULT_COUNTRY = "China";
     const CAPACITY_DATA_PATH = "./data/capacity_yearly.csv";
+    const TARGET_YEAR = 2030;
 
     const SERIES_ORDER = [
       "Other fossil",
+      "Oil",
       "Coal",
       "Gas",
       "Nuclear",
@@ -277,6 +502,8 @@
       "coal": "Coal",
       "gas": "Gas",
       "gas and other fossil": "Gas",
+      "oil": "Oil",
+      "oil and gas": "Gas",
       "other fossil fuels": "Other fossil",
       "nuclear": "Nuclear",
       "bioenergy": "Bioenergy",
@@ -295,6 +522,7 @@
       "Bioenergy": "#2b6cb0",
       "Nuclear": "#1f3b73",
       "Gas": "#a58a87",
+      "Oil": "#b8a39c",
       "Coal": "#6b4c43",
       "Other fossil": "#cfc7c3",
       "Other renewables": "#54d38f"
@@ -309,12 +537,31 @@
     const generationMetaEl = document.getElementById("generationMeta");
     const capacityMetaEl = document.getElementById("capacityMeta");
 
+    const projectionModeEl = document.getElementById("projectionMode");
+    const totalCapacityTargetEl = document.getElementById("totalCapacityTarget");
+    const resetProjectionBtn = document.getElementById("resetProjectionBtn");
+    const projectionTableBody = document.getElementById("projectionTableBody");
+    const summaryCapacityYearEl = document.getElementById("summaryCapacityYear");
+    const summaryGenerationYearEl = document.getElementById("summaryGenerationYear");
+    const summaryDefaultTargetEl = document.getElementById("summaryDefaultTarget");
+    const summaryGrowthEl = document.getElementById("summaryGrowth");
+    const totalLatestCapacityCell = document.getElementById("totalLatestCapacityCell");
+    const totalTargetCapacityCell = document.getElementById("totalTargetCapacityCell");
+    const totalCapacityPctCell = document.getElementById("totalCapacityPctCell");
+
     let countriesLoadedForKey = null;
     let loadCountriesTimer = null;
     let loadChartsTimer = null;
     let latestCountriesRequestId = 0;
     let latestChartsRequestId = 0;
     let capacityDataPromise = null;
+
+    let appState = {
+      country: null,
+      startYear: null,
+      historical: null,
+      projection: null
+    };
 
     apiKeyInput.value = localStorage.getItem(STORAGE_KEY) || "";
 
@@ -411,8 +658,7 @@
 
     function getApiKey() {
       const key = apiKeyInput.value.trim();
-      if (!key) return null;
-      return key;
+      return key || null;
     }
 
     function saveApiKey() {
@@ -468,45 +714,33 @@
     function seriesColor(name) {
       const exact = SERIES_COLORS[name];
       if (exact) return exact;
-
-      const foundKey = Object.keys(SERIES_COLORS).find(
-        (key) => key.toLowerCase() === String(name).toLowerCase()
-      );
+      const foundKey = Object.keys(SERIES_COLORS).find((key) => key.toLowerCase() === String(name).toLowerCase());
       return foundKey ? SERIES_COLORS[foundKey] : "#7f8ea3";
+    }
+
+    function hexToRgba(hex, alpha = 1) {
+      if (!hex || typeof hex !== "string") return `rgba(127, 142, 163, ${alpha})`;
+      const normal = hex.replace("#", "");
+      if (normal.length !== 6) return `rgba(127, 142, 163, ${alpha})`;
+      const r = parseInt(normal.slice(0, 2), 16);
+      const g = parseInt(normal.slice(2, 4), 16);
+      const b = parseInt(normal.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     function commonChartConfig() {
       return {
         responsive: true,
         displaylogo: false,
-        modeBarButtonsToRemove: [
-          "select2d",
-          "lasso2d",
-          "autoScale2d",
-          "toggleSpikelines"
-        ]
+        modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toggleSpikelines"]
       };
     }
 
-    function buildStackedAreaTraces({ years, seriesNames, valuesBySeries, valueSuffix, decimals = 1 }) {
-      return seriesNames.map((name) => ({
-        type: "scatter",
-        mode: "lines",
-        name,
-        x: years,
-        y: years.map((year) => valuesBySeries.get(name).get(year)),
-        stackgroup: "stack",
-        line: {
-          width: 1,
-          color: seriesColor(name)
-        },
-        fillcolor: seriesColor(name),
-        hovertemplate: `%{fullData.name}<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
-      }));
-    }
+    function baseLayout(titleText, subtitleText, historicalLatestYear) {
+      const projectionStartYear = Number.isFinite(historicalLatestYear) ? historicalLatestYear + 1 : null;
+      const hasProjection = Number.isFinite(projectionStartYear) && projectionStartYear <= TARGET_YEAR;
 
-    function baseLayout(titleText, subtitleText) {
-      return {
+      const layout = {
         title: {
           text: `${titleText}<br><sup>${subtitleText}</sup>`,
           x: 0,
@@ -516,19 +750,20 @@
         paper_bgcolor: "#ffffff",
         plot_bgcolor: "#ffffff",
         hovermode: "x unified",
-        margin: { l: 62, r: 18, t: 68, b: 42 },
+        margin: { l: 62, r: 18, t: 82, b: 48 },
         legend: {
           orientation: "h",
           x: 0,
           xanchor: "left",
-          y: -0.14,
+          y: -0.16,
           yanchor: "top",
           traceorder: "reversed",
           font: { size: 11 }
         },
         xaxis: {
           title: "",
-          tickmode: "auto",
+          tickmode: "linear",
+          dtick: 1,
           showgrid: false,
           zeroline: false
         },
@@ -537,36 +772,152 @@
           rangemode: "tozero",
           gridcolor: "#e7edf5",
           zeroline: false
-        }
+        },
+        shapes: [],
+        annotations: []
       };
+
+      if (hasProjection) {
+        layout.shapes.push(
+          {
+            type: "rect",
+            xref: "x",
+            yref: "paper",
+            x0: projectionStartYear - 0.5,
+            x1: TARGET_YEAR + 0.5,
+            y0: 0,
+            y1: 1,
+            fillcolor: "rgba(100, 116, 139, 0.08)",
+            line: { width: 0 }
+          },
+          {
+            type: "line",
+            xref: "x",
+            yref: "paper",
+            x0: projectionStartYear - 0.5,
+            x1: projectionStartYear - 0.5,
+            y0: 0,
+            y1: 1,
+            line: {
+              color: "#64748b",
+              width: 1.5,
+              dash: "dot"
+            }
+          }
+        );
+        layout.annotations.push({
+          xref: "x",
+          yref: "paper",
+          x: projectionStartYear + ((TARGET_YEAR - projectionStartYear) / 2),
+          y: 1.11,
+          text: "Projected to 2030",
+          showarrow: false,
+          font: { size: 12, color: "#475569" }
+        });
+      }
+
+      return layout;
+    }
+
+    function fmtNumber(value, decimals = 1) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return "-";
+      return num.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+    }
+
+    function fmtPercent(value, decimals = 1) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return "-";
+      return `${num.toFixed(decimals)}%`;
+    }
+
+    function clamp(value, min, max) {
+      if (!Number.isFinite(value)) return value;
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function getLatestValueForSeries(transformed, seriesName) {
+      const map = transformed?.valuesBySeries?.get(seriesName);
+      if (!map) return { year: null, value: 0 };
+      const years = Array.from(map.keys())
+        .map(Number)
+        .filter((year) => Number.isFinite(year))
+        .sort((a, b) => a - b);
+
+      for (let i = years.length - 1; i >= 0; i -= 1) {
+        const year = years[i];
+        const value = Number(map.get(year));
+        if (Number.isFinite(value)) {
+          return { year, value };
+        }
+      }
+      return { year: null, value: 0 };
+    }
+
+    function sumSeriesAtYear(transformed, year) {
+      if (!transformed?.seriesNames?.length) return 0;
+      return transformed.seriesNames.reduce((sum, name) => {
+        const map = transformed.valuesBySeries.get(name);
+        const value = Number(map?.get(year) ?? 0);
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+    }
+
+    function computeTotalByYear(transformed) {
+      const totals = new Map();
+      for (const year of transformed.years) {
+        totals.set(year, sumSeriesAtYear(transformed, year));
+      }
+      return totals;
+    }
+
+    function averageRecentGrowthFromTotals(totalMap, maxIntervals = 3) {
+      const years = Array.from(totalMap.keys()).map(Number).sort((a, b) => a - b);
+      const growthRates = [];
+      for (let i = years.length - 1; i > 0 && growthRates.length < maxIntervals; i -= 1) {
+        const year = years[i];
+        const prevYear = years[i - 1];
+        if (year - prevYear !== 1) continue;
+        const current = Number(totalMap.get(year));
+        const prev = Number(totalMap.get(prevYear));
+        if (!Number.isFinite(current) || !Number.isFinite(prev) || prev <= 0) continue;
+        growthRates.push((current / prev) - 1);
+      }
+
+      if (!growthRates.length) return 0;
+      return growthRates.reduce((sum, value) => sum + value, 0) / growthRates.length;
     }
 
     function transformGenerationRows(rows) {
       const filteredRows = rows.filter((row) => row?.is_aggregate_series === false);
-      const years = [...new Set(filteredRows.map((row) => String(row.date)))].sort();
+      const years = [...new Set(filteredRows.map((row) => Number(row.date)).filter(Number.isFinite))].sort((a, b) => a - b);
       const seriesNames = [...new Set(filteredRows.map((row) => cleanSeriesName(row.series)).filter(Boolean))]
         .sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
-      const valuesBySeries = new Map(
-        seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))])
-      );
+      const valuesBySeries = new Map(seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))]));
 
       for (const row of filteredRows) {
-        const year = String(row.date);
+        const year = Number(row.date);
         const name = cleanSeriesName(row.series);
-        if (!valuesBySeries.has(name)) continue;
+        if (!valuesBySeries.has(name) || !Number.isFinite(year)) continue;
         const value = Number(row.generation_twh ?? 0);
         valuesBySeries.get(name).set(year, Number.isFinite(value) ? value : 0);
       }
 
+      const nonZeroSeries = seriesNames.filter((name) => {
+        const values = Array.from(valuesBySeries.get(name).values());
+        return values.some((value) => value !== 0);
+      });
+
       return {
         years,
-        seriesNames: seriesNames.filter((name) => {
-          const values = Array.from(valuesBySeries.get(name).values());
-          return values.some((value) => value !== 0);
-        }),
+        seriesNames: nonZeroSeries,
         valuesBySeries,
-        rowCount: filteredRows.length
+        rowCount: filteredRows.length,
+        latestYear: years.length ? years[years.length - 1] : null
       };
     }
 
@@ -591,97 +942,418 @@
         return true;
       });
 
-      const years = [...new Set(filteredRows.map((row) => String(row.Year || row.year)))]
-        .sort((a, b) => Number(a) - Number(b));
+      const years = [...new Set(filteredRows.map((row) => Number(row.Year || row.year)).filter(Number.isFinite))]
+        .sort((a, b) => a - b);
 
       const seriesNames = [...new Set(
         filteredRows.map((row) => normaliseSeriesName(row.Variable || row.variable)).filter(Boolean)
       )].sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
-      const valuesBySeries = new Map(
-        seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))])
-      );
+      const valuesBySeries = new Map(seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))]));
 
       for (const row of filteredRows) {
-        const year = String(row.Year || row.year);
+        const year = Number(row.Year || row.year);
         const name = normaliseSeriesName(row.Variable || row.variable);
         const value = Number(row.Value || row.value);
-        if (!valuesBySeries.has(name)) continue;
+        if (!valuesBySeries.has(name) || !Number.isFinite(year)) continue;
         valuesBySeries.get(name).set(year, Number.isFinite(value) ? value : 0);
       }
 
+      const nonZeroSeries = seriesNames.filter((name) => {
+        const values = Array.from(valuesBySeries.get(name).values());
+        return values.some((value) => value !== 0);
+      });
+
       return {
         years,
-        seriesNames: seriesNames.filter((name) => {
-          const values = Array.from(valuesBySeries.get(name).values());
-          return values.some((value) => value !== 0);
-        }),
+        seriesNames: nonZeroSeries,
         valuesBySeries,
-        rowCount: filteredRows.length
+        rowCount: filteredRows.length,
+        latestYear: years.length ? years[years.length - 1] : null
       };
     }
 
-    async function renderGenerationChart(country, startYear, apiKey) {
-      const payload = await fetchJson("/electricity-generation/yearly", {
-        entity: country,
-        start_date: startYear,
-        is_aggregate_series: false,
-        include_all_dates_value_range: true,
-        api_key: apiKey
+    function computeImpliedCapacityFactor(capacityValueGw, generationValueTwh) {
+      const capacity = Number(capacityValueGw);
+      const generation = Number(generationValueTwh);
+      if (!Number.isFinite(capacity) || !Number.isFinite(generation) || capacity <= 0) return null;
+      return generation / (capacity * 8.76);
+    }
+
+    function buildDefaultProjectionModel(country, historical) {
+      const techSet = new Set([
+        ...(historical.capacity.seriesNames || []),
+        ...(historical.generation.seriesNames || [])
+      ]);
+      const technologies = Array.from(techSet).sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+
+      const latestCapacityYear = historical.capacity.latestYear;
+      const latestGenerationYear = historical.generation.latestYear;
+      const latestTotalCapacity = Number.isFinite(latestCapacityYear) ? sumSeriesAtYear(historical.capacity, latestCapacityYear) : 0;
+      const totalGenerationByYear = computeTotalByYear(historical.generation);
+      const avgRecentGrowth = averageRecentGrowthFromTotals(totalGenerationByYear, 3);
+      const yearsRemaining = Number.isFinite(latestCapacityYear) ? Math.max(TARGET_YEAR - latestCapacityYear, 0) : 0;
+      const defaultTotalCapacityTarget = latestTotalCapacity * Math.max(0, 1 + (avgRecentGrowth * yearsRemaining));
+
+      const rows = technologies.map((technology) => {
+        const latestCap = getLatestValueForSeries(historical.capacity, technology);
+        const latestGen = getLatestValueForSeries(historical.generation, technology);
+
+        let latestCfYear = null;
+        let latestCf = null;
+        const candidateYears = [...new Set([
+          ...(historical.capacity.years || []),
+          ...(historical.generation.years || [])
+        ])].sort((a, b) => a - b);
+
+        for (let i = candidateYears.length - 1; i >= 0; i -= 1) {
+          const year = candidateYears[i];
+          const cap = Number(historical.capacity.valuesBySeries.get(technology)?.get(year));
+          const gen = Number(historical.generation.valuesBySeries.get(technology)?.get(year));
+          const cf = computeImpliedCapacityFactor(cap, gen);
+          if (cf !== null && Number.isFinite(cf)) {
+            latestCfYear = year;
+            latestCf = clamp(cf, 0, 1.2);
+            break;
+          }
+        }
+
+        const latestCapacity = Number.isFinite(latestCap.value) ? latestCap.value : 0;
+        const capacityShare = latestTotalCapacity > 0 ? latestCapacity / latestTotalCapacity : 0;
+        const capTargetDefault = defaultTotalCapacityTarget * capacityShare;
+        const cfDefault = Number.isFinite(latestCf) ? latestCf : 0;
+
+        return {
+          technology,
+          latestCapacityYear: latestCap.year,
+          latestCapacity,
+          latestGenerationYear: latestGen.year,
+          latestGeneration: Number.isFinite(latestGen.value) ? latestGen.value : 0,
+          latestCfYear,
+          latestCf,
+          capacityShare,
+          capTargetManual: capTargetDefault,
+          cfTargetManual: cfDefault
+        };
       });
 
-      const rows = Array.isArray(payload?.data) ? payload.data : [];
-      if (!rows.length) {
+      return {
+        country,
+        mode: "per-tech",
+        totalCapacityTarget2030: defaultTotalCapacityTarget,
+        defaultTotalCapacityTarget,
+        avgRecentGrowth,
+        rows
+      };
+    }
+
+    function reconcileProjectionModel(existingProjection, country, historical) {
+      const fresh = buildDefaultProjectionModel(country, historical);
+      if (!existingProjection || existingProjection.country !== country) {
+        return fresh;
+      }
+
+      const existingRowsByTech = new Map((existingProjection.rows || []).map((row) => [row.technology, row]));
+      fresh.rows = fresh.rows.map((row) => {
+        const prior = existingRowsByTech.get(row.technology);
+        if (!prior) return row;
+        return {
+          ...row,
+          capTargetManual: Number.isFinite(Number(prior.capTargetManual)) ? Number(prior.capTargetManual) : row.capTargetManual,
+          cfTargetManual: Number.isFinite(Number(prior.cfTargetManual)) ? Number(prior.cfTargetManual) : row.cfTargetManual
+        };
+      });
+
+      fresh.mode = existingProjection.mode || fresh.mode;
+      fresh.totalCapacityTarget2030 = Number.isFinite(Number(existingProjection.totalCapacityTarget2030))
+        ? Number(existingProjection.totalCapacityTarget2030)
+        : fresh.totalCapacityTarget2030;
+
+      return fresh;
+    }
+
+    function getEffectiveCapTarget(row, projection) {
+      if (projection.mode === "total-only") {
+        return Number(projection.totalCapacityTarget2030 || 0) * Number(row.capacityShare || 0);
+      }
+      return Number(row.capTargetManual || 0);
+    }
+
+    function getEffectiveCfTarget(row) {
+      return Number(row.cfTargetManual || 0);
+    }
+
+    function capacityPctChange(row, projection) {
+      const latest = Number(row.latestCapacity || 0);
+      const target = getEffectiveCapTarget(row, projection);
+      if (!Number.isFinite(latest) || latest === 0) {
+        return target === 0 ? 0 : null;
+      }
+      return ((target / latest) - 1) * 100;
+    }
+
+    function cfPctChange(row) {
+      const latest = Number(row.latestCf);
+      const target = getEffectiveCfTarget(row);
+      if (!Number.isFinite(latest) || latest === 0) {
+        return target === 0 ? 0 : null;
+      }
+      return ((target / latest) - 1) * 100;
+    }
+
+    function totalEffectiveCapacityTarget(projection) {
+      return projection.rows.reduce((sum, row) => sum + getEffectiveCapTarget(row, projection), 0);
+    }
+
+    function totalLatestCapacity(projection) {
+      return projection.rows.reduce((sum, row) => sum + Number(row.latestCapacity || 0), 0);
+    }
+
+    function renderProjectionSummary(historical, projection) {
+      summaryCapacityYearEl.textContent = historical.capacity.latestYear ?? "-";
+      summaryGenerationYearEl.textContent = historical.generation.latestYear ?? "-";
+      summaryDefaultTargetEl.textContent = Number.isFinite(projection.defaultTotalCapacityTarget)
+        ? `${fmtNumber(projection.defaultTotalCapacityTarget, 1)} GW`
+        : "-";
+      summaryGrowthEl.textContent = Number.isFinite(projection.avgRecentGrowth)
+        ? fmtPercent(projection.avgRecentGrowth * 100, 1)
+        : "-";
+
+      const latestTotal = totalLatestCapacity(projection);
+      const targetTotal = totalEffectiveCapacityTarget(projection);
+      totalLatestCapacityCell.textContent = `${fmtNumber(latestTotal, 1)} GW`;
+      totalTargetCapacityCell.textContent = `${fmtNumber(targetTotal, 1)} GW`;
+      const totalPct = latestTotal > 0 ? ((targetTotal / latestTotal) - 1) * 100 : null;
+      totalCapacityPctCell.textContent = Number.isFinite(totalPct) ? fmtPercent(totalPct, 1) : "-";
+    }
+
+    function renderProjectionTable() {
+      const projection = appState.projection;
+      const historical = appState.historical;
+
+      if (!projection || !historical) {
+        projectionTableBody.innerHTML = '<tr><td colspan="7" class="muted-inline">Load a country to populate the projection table.</td></tr>';
+        projectionModeEl.disabled = true;
+        totalCapacityTargetEl.disabled = true;
+        resetProjectionBtn.disabled = true;
+        return;
+      }
+
+      projectionModeEl.disabled = false;
+      totalCapacityTargetEl.disabled = projection.mode !== "total-only";
+      resetProjectionBtn.disabled = false;
+
+      projectionModeEl.value = projection.mode;
+      totalCapacityTargetEl.value = fmtNumber(
+        projection.mode === "total-only" ? projection.totalCapacityTarget2030 : totalEffectiveCapacityTarget(projection),
+        1
+      );
+
+      projectionTableBody.innerHTML = projection.rows.map((row, index) => {
+        const capTarget = getEffectiveCapTarget(row, projection);
+        const capPct = capacityPctChange(row, projection);
+        const cfTarget = getEffectiveCfTarget(row);
+        const cfPct = cfPctChange(row);
+        const capReadonly = projection.mode === "total-only" ? "readonly" : "";
+        const capDisabledHint = projection.mode === "total-only" ? "title=\"Calculated from total target and latest shares\"" : "";
+
+        return `
+          <tr data-row-index="${index}">
+            <td>${row.technology}</td>
+            <td class="num">${fmtNumber(row.latestCapacity, 1)}</td>
+            <td class="num">
+              <input type="number" step="0.1" min="0" data-input-type="cap-target" data-row-index="${index}" value="${Number.isFinite(capTarget) ? capTarget.toFixed(1) : 0}" ${capReadonly} ${capDisabledHint} />
+            </td>
+            <td class="num">
+              <input type="number" step="0.1" data-input-type="cap-pct" data-row-index="${index}" value="${Number.isFinite(capPct) ? capPct.toFixed(1) : 0}" ${capReadonly} ${capDisabledHint} />
+            </td>
+            <td class="num">${Number.isFinite(row.latestCf) ? fmtNumber(row.latestCf, 3) : "-"}</td>
+            <td class="num">
+              <input type="number" step="0.01" min="0" max="1.2" data-input-type="cf-target" data-row-index="${index}" value="${Number.isFinite(cfTarget) ? cfTarget.toFixed(3) : 0}" />
+            </td>
+            <td class="num">
+              <input type="number" step="0.1" data-input-type="cf-pct" data-row-index="${index}" value="${Number.isFinite(cfPct) ? cfPct.toFixed(1) : 0}" />
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      renderProjectionSummary(historical, projection);
+    }
+
+    function buildProjectedSeriesMap(projection, historicalType) {
+      const projectionYearStart = historicalType.latestYear + 1;
+      const years = [];
+      for (let year = projectionYearStart; year <= TARGET_YEAR; year += 1) {
+        years.push(year);
+      }
+
+      const valuesBySeries = new Map();
+      projection.rows.forEach((row) => {
+        const baseValue = historicalType.kind === "capacity"
+          ? Number(row.latestCapacity || 0)
+          : Number(row.latestGeneration || 0);
+
+        const baseYear = historicalType.kind === "capacity"
+          ? (Number(row.latestCapacityYear) || historicalType.latestYear)
+          : (Number(row.latestGenerationYear) || historicalType.latestYear);
+
+        const capStartValue = Number(row.latestCapacity || 0);
+        const capTarget = getEffectiveCapTarget(row, projection);
+        const cfStart = Number.isFinite(row.latestCf) ? Number(row.latestCf) : 0;
+        const cfTarget = getEffectiveCfTarget(row);
+
+        const techMap = new Map();
+        years.forEach((year) => {
+          const capYearsSpan = Math.max(TARGET_YEAR - baseYear, 1);
+          const capInterpolated = capStartValue + ((capTarget - capStartValue) * ((year - baseYear) / capYearsSpan));
+          const cfYearsSpan = Math.max(TARGET_YEAR - baseYear, 1);
+          const cfInterpolated = cfStart + ((cfTarget - cfStart) * ((year - baseYear) / cfYearsSpan));
+
+          if (historicalType.kind === "capacity") {
+            techMap.set(year, Math.max(0, capInterpolated));
+          } else {
+            techMap.set(year, Math.max(0, capInterpolated) * Math.max(0, cfInterpolated) * 8.76);
+          }
+        });
+
+        valuesBySeries.set(row.technology, techMap);
+      });
+
+      return { years, valuesBySeries };
+    }
+
+    function buildStackedAreaTraces({ historical, projection, valueSuffix, decimals = 1 }) {
+      const traces = [];
+
+      const histYears = historical.years || [];
+      const histLatestYear = historical.latestYear;
+      const projected = histLatestYear && histLatestYear < TARGET_YEAR
+        ? buildProjectedSeriesMap(appState.projection, { ...historical, kind: projection })
+        : { years: [], valuesBySeries: new Map() };
+
+      const seriesNames = Array.from(new Set([
+        ...(historical.seriesNames || []),
+        ...(appState.projection?.rows || []).map((row) => row.technology)
+      ])).sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+
+      seriesNames.forEach((name) => {
+        const histMap = historical.valuesBySeries.get(name) || new Map();
+        const histValues = histYears.map((year) => Number(histMap.get(year) ?? 0));
+        const hasHist = histValues.some((value) => value !== 0);
+
+        if (hasHist) {
+          traces.push({
+            type: "scatter",
+            mode: "lines",
+            name,
+            legendgroup: name,
+            x: histYears,
+            y: histValues,
+            stackgroup: "stack",
+            line: {
+              width: 1,
+              color: seriesColor(name)
+            },
+            fillcolor: hexToRgba(seriesColor(name), 0.95),
+            hovertemplate: `%{fullData.name}<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
+          });
+        }
+
+        const projYears = projected.years || [];
+        const projMap = projected.valuesBySeries.get(name) || new Map();
+        const projValues = projYears.map((year) => Number(projMap.get(year) ?? 0));
+        const hasProj = projValues.some((value) => value !== 0);
+
+        if (hasProj) {
+          traces.push({
+            type: "scatter",
+            mode: "lines",
+            name,
+            legendgroup: name,
+            showlegend: false,
+            x: projYears,
+            y: projValues,
+            stackgroup: "stack",
+            line: {
+              width: 1,
+              color: seriesColor(name),
+              dash: "dash"
+            },
+            fillcolor: hexToRgba(seriesColor(name), 0.45),
+            hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
+          });
+        }
+      });
+
+      return traces;
+    }
+
+    async function drawChartsFromState() {
+      if (!appState.historical || !appState.projection || !appState.country) return;
+
+      const country = appState.country;
+      const generationHist = appState.historical.generation;
+      const capacityHist = appState.historical.capacity;
+
+      if (!generationHist.seriesNames.length) {
+        showChartMessage(generationChartEl, `No usable generation series were returned for ${country}.`);
+      } else {
+        const generationTraces = buildStackedAreaTraces({
+          historical: generationHist,
+          projection: "generation",
+          valueSuffix: "TWh",
+          decimals: 1
+        });
+        const generationLayout = baseLayout(`Electricity generation in ${country}`, "Terawatt-hours", generationHist.latestYear);
+        await Plotly.react(generationChartEl, generationTraces, generationLayout, commonChartConfig());
+        generationMetaEl.textContent = generationHist.latestYear < TARGET_YEAR
+          ? `Latest historical year: ${generationHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
+          : `Latest historical year: ${generationHist.latestYear}.`;
+      }
+
+      if (!capacityHist.seriesNames.length) {
+        showChartMessage(capacityChartEl, `No usable capacity series were found for ${country}.`);
+      } else {
+        const capacityTraces = buildStackedAreaTraces({
+          historical: capacityHist,
+          projection: "capacity",
+          valueSuffix: "GW",
+          decimals: 2
+        });
+        const capacityLayout = baseLayout(`Installed capacity in ${country}`, "Gigawatts", capacityHist.latestYear);
+        await Plotly.react(capacityChartEl, capacityTraces, capacityLayout, commonChartConfig());
+        capacityMetaEl.textContent = capacityHist.latestYear < TARGET_YEAR
+          ? `Latest historical year: ${capacityHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
+          : `Latest historical year: ${capacityHist.latestYear}.`;
+      }
+    }
+
+    async function loadHistoricalData(country, startYear, apiKey) {
+      const [generationPayload, capacityRows] = await Promise.all([
+        fetchJson("/electricity-generation/yearly", {
+          entity: country,
+          start_date: startYear,
+          is_aggregate_series: false,
+          include_all_dates_value_range: true,
+          api_key: apiKey
+        }),
+        loadCapacityData()
+      ]);
+
+      const generationRows = Array.isArray(generationPayload?.data) ? generationPayload.data : [];
+      if (!generationRows.length) {
         throw new Error(`No generation rows were returned for ${country}.`);
       }
 
-      const transformed = transformGenerationRows(rows);
-      if (!transformed.seriesNames.length) {
-        throw new Error(`No usable non-aggregate generation series were returned for ${country}.`);
-      }
+      const generation = transformGenerationRows(generationRows);
+      const capacity = transformCapacityRows(capacityRows, country, startYear);
 
-      const traces = buildStackedAreaTraces({
-        years: transformed.years,
-        seriesNames: transformed.seriesNames,
-        valuesBySeries: transformed.valuesBySeries,
-        valueSuffix: "TWh",
-        decimals: 1
-      });
-
-      const latestYear = transformed.years[transformed.years.length - 1];
-      const layout = baseLayout(`Electricity generation in ${country}`, "Terawatt-hours");
-
-      await Plotly.react(generationChartEl, traces, layout, commonChartConfig());
-      generationMetaEl.textContent = `Latest year in returned series: ${latestYear}`;
-      return `Generation: ${transformed.rowCount} non-aggregate records across ${transformed.seriesNames.length} series.`;
-    }
-
-    async function renderCapacityChart(country, startYear) {
-      const rows = await loadCapacityData();
-      const transformed = transformCapacityRows(rows, country, startYear);
-
-      if (!transformed.rowCount) {
+      if (!capacity.rowCount) {
         throw new Error(`No local yearly capacity rows matched ${country}. Check the country names in your CSV.`);
       }
 
-      if (!transformed.seriesNames.length) {
-        throw new Error(`No usable capacity series were found for ${country}.`);
-      }
-
-      const traces = buildStackedAreaTraces({
-        years: transformed.years,
-        seriesNames: transformed.seriesNames,
-        valuesBySeries: transformed.valuesBySeries,
-        valueSuffix: "GW",
-        decimals: 2
-      });
-
-      const latestYear = transformed.years[transformed.years.length - 1];
-      const layout = baseLayout(`Installed capacity in ${country}`, "Gigawatts");
-
-      await Plotly.react(capacityChartEl, traces, layout, commonChartConfig());
-      capacityMetaEl.textContent = `Latest year in local capacity file: ${latestYear}`;
-      return `Capacity: ${transformed.rowCount} yearly records across ${transformed.seriesNames.length} series.`;
+      return { generation, capacity };
     }
 
     async function loadCountries() {
@@ -767,58 +1439,113 @@
         return;
       }
 
-      setStatus(`Loading charts for ${country}...`);
+      setStatus(`Loading historical data and rebuilding projections for ${country}...`);
 
-      const [generationResult, capacityResult] = await Promise.allSettled([
-        renderGenerationChart(country, startYear, apiKey),
-        renderCapacityChart(country, startYear)
-      ]);
+      try {
+        const historical = await loadHistoricalData(country, startYear, apiKey);
+        if (requestId !== latestChartsRequestId) return;
 
-      if (requestId !== latestChartsRequestId) return;
+        appState.country = country;
+        appState.startYear = startYear;
+        appState.historical = historical;
+        appState.projection = reconcileProjectionModel(appState.projection, country, historical);
 
-      const messages = [];
-      let hasSuccess = false;
-      let hasFailure = false;
+        renderProjectionTable();
+        await drawChartsFromState();
 
-      if (generationResult.status === "fulfilled") {
-        hasSuccess = true;
-        messages.push(generationResult.value);
-      } else {
-        hasFailure = true;
-        console.error(generationResult.reason);
+        setStatus(
+          `Showing ${country}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
+          `Capacity: ${historical.capacity.rowCount} yearly rows. Projection now extends both charts to ${TARGET_YEAR}.`
+        );
+      } catch (error) {
+        if (requestId !== latestChartsRequestId) return;
+        console.error(error);
+        clearCharts();
+        setStatus(error.message, true);
         generationMetaEl.textContent = "";
-        showChartMessage(generationChartEl, generationResult.reason?.message || "Could not load generation chart.");
-        messages.push(`Generation chart issue: ${generationResult.reason?.message || "Unknown error."}`);
-      }
-
-      if (capacityResult.status === "fulfilled") {
-        hasSuccess = true;
-        messages.push(capacityResult.value);
-      } else {
-        hasFailure = true;
-        console.error(capacityResult.reason);
         capacityMetaEl.textContent = "";
-        showChartMessage(capacityChartEl, capacityResult.reason?.message || "Could not load capacity chart.");
-        messages.push(`Capacity chart issue: ${capacityResult.reason?.message || "Unknown error."}`);
+        showChartMessage(generationChartEl, error.message || "Could not load generation chart.");
+        showChartMessage(capacityChartEl, error.message || "Could not load capacity chart.");
       }
-
-      const statusMessage = `Showing ${country}. ${messages.join(" ")}`;
-      setStatus(statusMessage, hasFailure && !hasSuccess);
     }
 
     function scheduleCountriesLoad() {
       window.clearTimeout(loadCountriesTimer);
-      loadCountriesTimer = window.setTimeout(() => {
-        loadCountries();
-      }, 350);
+      loadCountriesTimer = window.setTimeout(() => loadCountries(), 350);
     }
 
     function scheduleChartsLoad() {
       window.clearTimeout(loadChartsTimer);
-      loadChartsTimer = window.setTimeout(() => {
-        loadCharts();
-      }, 250);
+      loadChartsTimer = window.setTimeout(() => loadCharts(), 250);
     }
+
+    function updateProjectionFromRowInput(rowIndex, inputType, rawValue) {
+      const projection = appState.projection;
+      const row = projection?.rows?.[rowIndex];
+      if (!row) return;
+
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return;
+
+      if (inputType === "cap-target" && projection.mode !== "total-only") {
+        row.capTargetManual = Math.max(0, value);
+        projection.totalCapacityTarget2030 = totalEffectiveCapacityTarget(projection);
+      }
+
+      if (inputType === "cap-pct" && projection.mode !== "total-only") {
+        const latest = Number(row.latestCapacity || 0);
+        row.capTargetManual = Math.max(0, latest * (1 + (value / 100)));
+        projection.totalCapacityTarget2030 = totalEffectiveCapacityTarget(projection);
+      }
+
+      if (inputType === "cf-target") {
+        row.cfTargetManual = clamp(value, 0, 1.2);
+      }
+
+      if (inputType === "cf-pct") {
+        const latestCf = Number(row.latestCf || 0);
+        row.cfTargetManual = clamp(latestCf * (1 + (value / 100)), 0, 1.2);
+      }
+
+      renderProjectionTable();
+      drawChartsFromState();
+    }
+
+    projectionModeEl.addEventListener("change", () => {
+      if (!appState.projection) return;
+      appState.projection.mode = projectionModeEl.value;
+      if (appState.projection.mode === "per-tech") {
+        appState.projection.totalCapacityTarget2030 = totalEffectiveCapacityTarget(appState.projection);
+      }
+      renderProjectionTable();
+      drawChartsFromState();
+    });
+
+    totalCapacityTargetEl.addEventListener("input", () => {
+      if (!appState.projection) return;
+      const value = Number(totalCapacityTargetEl.value);
+      if (!Number.isFinite(value)) return;
+      appState.projection.totalCapacityTarget2030 = Math.max(0, value);
+      renderProjectionTable();
+      drawChartsFromState();
+    });
+
+    resetProjectionBtn.addEventListener("click", async () => {
+      if (!appState.country || !appState.historical) return;
+      appState.projection = buildDefaultProjectionModel(appState.country, appState.historical);
+      renderProjectionTable();
+      await drawChartsFromState();
+      setStatus(`Projection defaults reset for ${appState.country}.`);
+    });
+
+    projectionTableBody.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      const rowIndex = Number(target.dataset.rowIndex);
+      const inputType = String(target.dataset.inputType || "");
+      if (!Number.isFinite(rowIndex) || !inputType) return;
+      updateProjectionFromRowInput(rowIndex, inputType, target.value);
+    });
 
     apiKeyInput.addEventListener("input", () => {
       const key = saveApiKey();
