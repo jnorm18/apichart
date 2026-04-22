@@ -1278,6 +1278,7 @@
         ...(appState.projection?.rows || []).map((row) => row.technology)
       ])).sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
+      // Historical section: standard stacked area traces.
       seriesNames.forEach((name) => {
         const histMap = historical.valuesBySeries.get(name) || new Map();
         const histValues = histYears.map((year) => Number(histMap.get(year) ?? 0));
@@ -1291,7 +1292,7 @@
             legendgroup: name,
             x: histYears,
             y: histValues,
-            stackgroup: "stack",
+            stackgroup: "historical-stack",
             line: {
               width: 1,
               color: seriesColor(name)
@@ -1300,38 +1301,99 @@
             hovertemplate: `%{fullData.name}<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
           });
         }
+      });
 
-        const projYears = projected.years || [];
+      const projYears = projected.years || [];
+      if (!projYears.length) {
+        return traces;
+      }
+
+      // Compute cumulative boundaries explicitly for the projected section.
+      const histCumulativeAtLatest = new Map();
+      let histRunning = 0;
+      seriesNames.forEach((name) => {
+        const histMap = historical.valuesBySeries.get(name) || new Map();
+        histRunning += Number(histMap.get(histLatestYear) ?? 0);
+        histCumulativeAtLatest.set(name, histRunning);
+      });
+
+      const projectedValuesBySeries = new Map();
+      const projectedUpperBySeries = new Map();
+      let runningUpper = projYears.map(() => 0);
+
+      seriesNames.forEach((name) => {
         const projMap = projected.valuesBySeries.get(name) || new Map();
-        const projValues = projYears.map((year) => Number(projMap.get(year) ?? 0));
-        const hasProj = projValues.some((value) => value !== 0);
+        const seriesValues = projYears.map((year) => Number(projMap.get(year) ?? 0));
+        projectedValuesBySeries.set(name, seriesValues);
 
-        if (hasProj) {
-          const bridgeX = [];
-          const bridgeY = [];
-          if (Number.isFinite(histLatestYear)) {
-            bridgeX.push(histLatestYear);
-            bridgeY.push(Number(histMap.get(histLatestYear) ?? 0));
-          }
+        const upper = seriesValues.map((value, index) => runningUpper[index] + value);
+        projectedUpperBySeries.set(name, upper);
+        runningUpper = upper;
+      });
 
+      let previousUpper = projYears.map(() => 0);
+      seriesNames.forEach((name) => {
+        const seriesValues = projectedValuesBySeries.get(name) || projYears.map(() => 0);
+        const upper = projectedUpperBySeries.get(name) || previousUpper;
+        const hasProj = seriesValues.some((value) => value !== 0) || upper.some((value, index) => value !== previousUpper[index]);
+
+        if (!hasProj) {
+          previousUpper = upper;
+          return;
+        }
+
+        // Dashed bridge line only, with no fill, to connect the last historical boundary to the first projected boundary.
+        if (Number.isFinite(histLatestYear)) {
           traces.push({
             type: "scatter",
             mode: "lines",
             name,
             legendgroup: name,
             showlegend: false,
-            x: [...bridgeX, ...projYears],
-            y: [...bridgeY, ...projValues],
-            stackgroup: "stack",
+            x: [histLatestYear, projYears[0]],
+            y: [Number(histCumulativeAtLatest.get(name) ?? 0), Number(upper[0] ?? 0)],
             line: {
               width: 1,
               color: seriesColor(name),
               dash: "dash"
             },
-            fillcolor: hexToRgba(seriesColor(name), 0.45),
-            hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{y:.${decimals}f} ${valueSuffix}<extra></extra>`
+            hoverinfo: "skip"
           });
         }
+
+        // Invisible lower boundary.
+        traces.push({
+          type: "scatter",
+          mode: "lines",
+          x: projYears,
+          y: previousUpper,
+          line: { width: 0, color: "rgba(0,0,0,0)" },
+          hoverinfo: "skip",
+          showlegend: false,
+          legendgroup: name
+        });
+
+        // Visible projected band using explicit cumulative upper boundary.
+        traces.push({
+          type: "scatter",
+          mode: "lines",
+          name,
+          legendgroup: name,
+          showlegend: false,
+          x: projYears,
+          y: upper,
+          fill: "tonexty",
+          line: {
+            width: 1,
+            color: seriesColor(name),
+            dash: "dash"
+          },
+          fillcolor: hexToRgba(seriesColor(name), 0.45),
+          customdata: seriesValues,
+          hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{customdata:.${decimals}f} ${valueSuffix}<extra></extra>`
+        });
+
+        previousUpper = upper;
       });
 
       return traces;
