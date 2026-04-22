@@ -330,12 +330,12 @@
 <body>
   <div class="page">
     <div class="header">
-      <div class="pill">V2 beta • Historical data plus editable projections to 2030</div>
+      <div class="pill">V2.3 beta • Historical data plus editable projections to 2030</div>
       <h1>Electricity generation and capacity explorer</h1>
       <p class="subhead">
         Generation is pulled from Ember's API. Capacity is pulled from a local yearly file in your repo.
         This version adds an editable 2030 projection panel and extends both charts beyond the latest historical year.
-        The projected section is shown with lighter fills and a shaded projection band.
+        The projected section is shown with lighter fills and a shaded projection band. Capacity starts projecting from its first unavailable year, and generation starts projecting from its own first unavailable year.
       </p>
     </div>
 
@@ -450,7 +450,7 @@
       </div>
 
       <div class="projection-note" id="projectionNote">
-        Defaults follow the uploaded table spec: total 2030 capacity is estimated from the average year-on-year change in total generation over the latest up to 3 historical intervals, extended linearly to 2030, then distributed across technologies using latest capacity shares. In total-target mode, the 2030 total is also split across technologies using those latest capacity shares. Capacity factors default to each technology's latest observable implied value using the latest common year where both historical generation and capacity exist, and editable capacity factors are capped between 0 and 1.
+        Defaults follow the uploaded table spec: total 2030 capacity is estimated from the average year-on-year change in total generation over the latest up to 3 historical intervals, extended linearly to 2030, then distributed across technologies using latest capacity shares. In total-target mode, the 2030 total is also split across technologies using those latest capacity shares. Capacity factors default to each technology's latest observable implied value using the latest common year where both historical generation and capacity exist, and editable capacity factors are capped between 0 and 1. Generation projections are then anchored to the latest historical generation year for visual continuity.
       </div>
     </section>
 
@@ -1246,17 +1246,40 @@
         const cfStart = Number.isFinite(row.latestCf) ? Number(row.latestCf) : 0;
         const cfTarget = getEffectiveCfTarget(row);
 
-        const techMap = new Map();
-        years.forEach((year) => {
+        const rawValues = years.map((year) => {
           const capInterpolated = interpolateLinearToTarget(capBaseYear, capStartValue, capTarget, year);
           const cfInterpolated = interpolateLinearToTarget(cfBaseYear, cfStart, cfTarget, year);
 
           if (historicalType.kind === "capacity") {
-            techMap.set(year, Math.max(0, capInterpolated));
-          } else {
-            techMap.set(year, Math.max(0, capInterpolated) * clamp(cfInterpolated, 0, 1) * 8.76);
+            return Math.max(0, capInterpolated);
           }
+          return Math.max(0, capInterpolated) * clamp(cfInterpolated, 0, 1) * 8.76;
         });
+
+        const techMap = new Map();
+
+        if (historicalType.kind === "generation") {
+          const anchorYear = historicalType.latestYear;
+          const anchorValue = Number(historicalType.valuesBySeries.get(row.technology)?.get(anchorYear) ?? 0);
+          const firstProjectedValue = Number(rawValues[0] ?? 0);
+
+          let scaleFactor = 1;
+          if (firstProjectedValue > 0) {
+            scaleFactor = Math.max(0, anchorValue) / firstProjectedValue;
+          } else if (anchorValue === 0) {
+            scaleFactor = 1;
+          } else {
+            scaleFactor = 0;
+          }
+
+          years.forEach((year, index) => {
+            techMap.set(year, Math.max(0, rawValues[index] * scaleFactor));
+          });
+        } else {
+          years.forEach((year, index) => {
+            techMap.set(year, Math.max(0, rawValues[index]));
+          });
+        }
 
         valuesBySeries.set(row.technology, techMap);
       });
@@ -1309,12 +1332,14 @@
       }
 
       // Compute cumulative boundaries explicitly for the projected section.
-      const histCumulativeAtLatest = new Map();
+      const histLowerAtLatest = new Map();
+      const histUpperAtLatest = new Map();
       let histRunning = 0;
       seriesNames.forEach((name) => {
         const histMap = historical.valuesBySeries.get(name) || new Map();
+        histLowerAtLatest.set(name, histRunning);
         histRunning += Number(histMap.get(histLatestYear) ?? 0);
-        histCumulativeAtLatest.set(name, histRunning);
+        histUpperAtLatest.set(name, histRunning);
       });
 
       const projectedValuesBySeries = new Map();
@@ -1342,46 +1367,30 @@
           return;
         }
 
-        // Dashed bridge line only, with no fill, to connect the last historical boundary to the first projected boundary.
-        if (Number.isFinite(histLatestYear)) {
-          traces.push({
-            type: "scatter",
-            mode: "lines",
-            name,
-            legendgroup: name,
-            showlegend: false,
-            x: [histLatestYear, projYears[0]],
-            y: [Number(histCumulativeAtLatest.get(name) ?? 0), Number(upper[0] ?? 0)],
-            line: {
-              width: 1,
-              color: seriesColor(name),
-              dash: "dash"
-            },
-            hoverinfo: "skip"
-          });
-        }
+        const projectedX = [histLatestYear, ...projYears];
+        const lowerBoundary = [Number(histLowerAtLatest.get(name) ?? 0), ...previousUpper];
+        const upperBoundary = [Number(histUpperAtLatest.get(name) ?? 0), ...upper];
+        const projectedSeriesWithAnchor = [Number(historical.valuesBySeries.get(name)?.get(histLatestYear) ?? 0), ...seriesValues];
 
-        // Invisible lower boundary.
         traces.push({
           type: "scatter",
           mode: "lines",
-          x: projYears,
-          y: previousUpper,
+          x: projectedX,
+          y: lowerBoundary,
           line: { width: 0, color: "rgba(0,0,0,0)" },
           hoverinfo: "skip",
           showlegend: false,
           legendgroup: name
         });
 
-        // Visible projected band using explicit cumulative upper boundary.
         traces.push({
           type: "scatter",
           mode: "lines",
           name,
           legendgroup: name,
           showlegend: false,
-          x: projYears,
-          y: upper,
+          x: projectedX,
+          y: upperBoundary,
           fill: "tonexty",
           line: {
             width: 1,
@@ -1389,7 +1398,7 @@
             dash: "dash"
           },
           fillcolor: hexToRgba(seriesColor(name), 0.45),
-          customdata: seriesValues,
+          customdata: projectedSeriesWithAnchor,
           hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{customdata:.${decimals}f} ${valueSuffix}<extra></extra>`
         });
 
