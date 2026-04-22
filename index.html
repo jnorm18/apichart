@@ -80,14 +80,12 @@
       line-height: 1.4;
     }
 
-    .span-4 { grid-column: span 4; }
+    .span-6 { grid-column: span 6; }
     .span-3 { grid-column: span 3; }
-    .span-2 { grid-column: span 2; }
     .span-12 { grid-column: span 12; }
 
     input,
-    select,
-    button {
+    select {
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px 14px;
@@ -103,31 +101,10 @@
       border-color: var(--accent);
     }
 
-    button {
-      cursor: pointer;
-      font-weight: 700;
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
-    }
-
-    button.secondary {
-      background: #fff;
-      color: var(--text);
-    }
-
-    button:disabled,
     select:disabled,
     input:disabled {
       opacity: 0.6;
       cursor: not-allowed;
-    }
-
-    .button-row {
-      display: flex;
-      gap: 10px;
-      align-items: end;
-      height: 100%;
     }
 
     .chart-card {
@@ -170,8 +147,7 @@
     }
 
     @media (max-width: 900px) {
-      .span-4, .span-3, .span-2 { grid-column: span 12; }
-      .button-row { flex-direction: column; align-items: stretch; }
+      .span-6, .span-3 { grid-column: span 12; }
       #chart { min-height: 520px; }
     }
   </style>
@@ -179,45 +155,37 @@
 <body>
   <div class="page">
     <div class="header">
-      <div class="pill">V1 • Ember API annual generation</div>
+      <div class="pill">V1.1 • Ember API annual generation</div>
       <h1>Electricity generation explorer</h1>
       <p class="subhead">
-        Select a country and draw a stacked annual generation chart using Ember's yearly electricity-generation endpoint.
-        Your API key is stored locally in your browser so you do not need to commit it to GitHub.
+        Paste your Ember API key and the country list will load automatically. The chart also updates automatically
+        when you change the country or start year.
       </p>
     </div>
 
     <section class="card controls">
-      <div class="field span-4">
+      <div class="field span-6">
         <label for="apiKey">Ember API key</label>
         <input id="apiKey" type="password" placeholder="Paste your API key" autocomplete="off" />
         <small>Saved in your browser only. It is not written into the repository.</small>
       </div>
 
-      <div class="field span-4">
+      <div class="field span-3">
         <label for="countrySelect">Country or region</label>
         <select id="countrySelect" disabled>
-          <option value="">Load countries first</option>
+          <option value="">Enter API key first</option>
         </select>
-        <small>The dropdown is populated from Ember's options endpoint.</small>
+        <small>Loaded automatically from Ember's options endpoint.</small>
       </div>
 
-      <div class="field span-2">
+      <div class="field span-3">
         <label for="startYear">Start year</label>
         <input id="startYear" type="number" min="1900" max="2100" step="1" value="2000" />
-        <small>Default matches Ember's yearly endpoint.</small>
-      </div>
-
-      <div class="field span-2">
-        <label>&nbsp;</label>
-        <div class="button-row">
-          <button id="loadCountriesBtn">Load countries</button>
-          <button id="refreshBtn" class="secondary" disabled>Draw chart</button>
-        </div>
+        <small>Changing this refreshes the chart automatically.</small>
       </div>
 
       <div class="field span-12">
-        <div id="status" class="status">Enter your API key, then load the country list.</div>
+        <div id="status" class="status">Enter your API key to load countries and draw the chart.</div>
       </div>
     </section>
 
@@ -226,8 +194,7 @@
     </section>
 
     <p class="footer-note">
-      Data source: Ember API. Ember states that its data is published under CC-BY-4.0 and asks that Ember is cited as the source.
-      If the browser blocks direct API calls from GitHub Pages because of CORS, the next step would be to add a lightweight proxy.
+      Data source: Ember API. Only non-aggregate series are requested and plotted in this version.
     </p>
   </div>
 
@@ -260,53 +227,23 @@
       "Other renewables": "#54d38f"
     };
 
-    const SERIES_EXCLUDE = new Set([
-      "Total",
-      "Generation",
-      "Fossil",
-      "Renewables",
-      "Clean electricity",
-      "Low-carbon"
-    ]);
-
     const apiKeyInput = document.getElementById("apiKey");
     const countrySelect = document.getElementById("countrySelect");
     const startYearInput = document.getElementById("startYear");
-    const loadCountriesBtn = document.getElementById("loadCountriesBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
     const statusEl = document.getElementById("status");
     const chartEl = document.getElementById("chart");
 
+    let countriesLoadedForKey = null;
+    let loadCountriesTimer = null;
+    let loadChartTimer = null;
+    let latestCountriesRequestId = 0;
+    let latestChartRequestId = 0;
+
     apiKeyInput.value = localStorage.getItem(STORAGE_KEY) || "";
-
-    apiKeyInput.addEventListener("change", () => {
-      const key = apiKeyInput.value.trim();
-      if (key) {
-        localStorage.setItem(STORAGE_KEY, key);
-        setStatus("API key saved in this browser.");
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-        setStatus("API key cleared.");
-      }
-    });
-
-    loadCountriesBtn.addEventListener("click", loadCountries);
-    refreshBtn.addEventListener("click", loadChart);
-    countrySelect.addEventListener("change", loadChart);
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
       statusEl.classList.toggle("error", isError);
-    }
-
-    function getApiKey() {
-      const key = apiKeyInput.value.trim();
-      if (!key) {
-        setStatus("Please enter your Ember API key first.", true);
-        return null;
-      }
-      localStorage.setItem(STORAGE_KEY, key);
-      return key;
     }
 
     function buildUrl(path, params) {
@@ -369,44 +306,25 @@
         .sort((a, b) => a.label.localeCompare(b.label));
     }
 
-    async function loadCountries() {
-      const apiKey = getApiKey();
-      if (!apiKey) return;
+    function getApiKey() {
+      const key = apiKeyInput.value.trim();
+      if (!key) return null;
+      return key;
+    }
 
-      loadCountriesBtn.disabled = true;
-      refreshBtn.disabled = true;
-      countrySelect.disabled = true;
-      setStatus("Loading countries from Ember...");
-
-      try {
-        const payload = await fetchJson("/options/electricity-generation/yearly/entity", { api_key: apiKey });
-        const options = uniqueSortedOptions(extractOptionList(payload));
-
-        if (!options.length) {
-          throw new Error("No country options were returned. The options response format may be different than expected.");
-        }
-
-        countrySelect.innerHTML = "";
-        for (const option of options) {
-          const el = document.createElement("option");
-          el.value = option.value;
-          el.textContent = option.label;
-          if (option.label === DEFAULT_COUNTRY || option.value === DEFAULT_COUNTRY) {
-            el.selected = true;
-          }
-          countrySelect.appendChild(el);
-        }
-
-        countrySelect.disabled = false;
-        refreshBtn.disabled = false;
-        setStatus(`Loaded ${options.length} countries/regions. Drawing the chart...`);
-        await loadChart();
-      } catch (error) {
-        console.error(error);
-        setStatus(error.message, true);
-      } finally {
-        loadCountriesBtn.disabled = false;
+    function saveApiKey() {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem(STORAGE_KEY, key);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
       }
+      return key;
+    }
+
+    function clearChart() {
+      Plotly.purge(chartEl);
+      chartEl.innerHTML = "";
     }
 
     function seriesSortKey(name) {
@@ -428,22 +346,17 @@
       return String(name || "").trim();
     }
 
-    function shouldIncludeSeries(name) {
-      const cleaned = cleanSeriesName(name);
-      if (!cleaned) return false;
-      return ![...SERIES_EXCLUDE].some((value) => value.toLowerCase() === cleaned.toLowerCase());
-    }
-
     function transformGenerationRows(rows) {
-      const years = [...new Set(rows.map((row) => String(row.date)))].sort();
-      const seriesNames = [...new Set(rows.map((row) => cleanSeriesName(row.series)).filter(shouldIncludeSeries))]
+      const filteredRows = rows.filter((row) => row?.is_aggregate_series === false);
+      const years = [...new Set(filteredRows.map((row) => String(row.date)))].sort();
+      const seriesNames = [...new Set(filteredRows.map((row) => cleanSeriesName(row.series)).filter(Boolean))]
         .sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
       const valuesBySeries = new Map(
         seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))])
       );
 
-      for (const row of rows) {
+      for (const row of filteredRows) {
         const year = String(row.date);
         const name = cleanSeriesName(row.series);
         if (!valuesBySeries.has(name)) continue;
@@ -457,27 +370,106 @@
           const values = Array.from(valuesBySeries.get(name).values());
           return values.some((value) => value !== 0);
         }),
-        valuesBySeries
+        valuesBySeries,
+        rowCount: filteredRows.length
       };
+    }
+
+    async function loadCountries() {
+      const apiKey = saveApiKey();
+      const requestId = ++latestCountriesRequestId;
+
+      if (!apiKey) {
+        countriesLoadedForKey = null;
+        countrySelect.disabled = true;
+        countrySelect.innerHTML = '<option value="">Enter API key first</option>';
+        clearChart();
+        setStatus("Enter your API key to load countries and draw the chart.");
+        return;
+      }
+
+      if (countriesLoadedForKey === apiKey && countrySelect.options.length > 0) {
+        setStatus("Countries already loaded. Updating chart...");
+        scheduleChartLoad();
+        return;
+      }
+
+      countrySelect.disabled = true;
+      countrySelect.innerHTML = '<option value="">Loading countries...</option>';
+      setStatus("Loading countries from Ember...");
+
+      try {
+        const payload = await fetchJson("/options/electricity-generation/yearly/entity", { api_key: apiKey });
+        if (requestId !== latestCountriesRequestId) return;
+
+        const options = uniqueSortedOptions(extractOptionList(payload));
+        if (!options.length) {
+          throw new Error("No country options were returned. The options response format may be different than expected.");
+        }
+
+        countrySelect.innerHTML = "";
+        let defaultFound = false;
+
+        for (const option of options) {
+          const el = document.createElement("option");
+          el.value = option.value;
+          el.textContent = option.label;
+          if (option.label === DEFAULT_COUNTRY || option.value === DEFAULT_COUNTRY) {
+            el.selected = true;
+            defaultFound = true;
+          }
+          countrySelect.appendChild(el);
+        }
+
+        if (!defaultFound && options.length) {
+          countrySelect.value = options[0].value;
+        }
+
+        countriesLoadedForKey = apiKey;
+        countrySelect.disabled = false;
+        setStatus(`Loaded ${options.length} countries/regions. Updating chart...`);
+        await loadChart();
+      } catch (error) {
+        if (requestId !== latestCountriesRequestId) return;
+        console.error(error);
+        countriesLoadedForKey = null;
+        clearChart();
+        countrySelect.disabled = true;
+        countrySelect.innerHTML = '<option value="">Could not load countries</option>';
+        setStatus(error.message, true);
+      }
     }
 
     async function loadChart() {
       const apiKey = getApiKey();
       const country = countrySelect.value;
       const startYear = startYearInput.value.trim() || "2000";
+      const requestId = ++latestChartRequestId;
 
-      if (!apiKey || !country) return;
+      if (!apiKey) {
+        clearChart();
+        setStatus("Enter your API key to load countries and draw the chart.");
+        return;
+      }
 
-      refreshBtn.disabled = true;
+      if (!country) {
+        clearChart();
+        setStatus("Choose a country or region.");
+        return;
+      }
+
       setStatus(`Loading annual generation data for ${country}...`);
 
       try {
         const payload = await fetchJson("/electricity-generation/yearly", {
           entity: country,
           start_date: startYear,
+          is_aggregate_series: false,
           include_all_dates_value_range: true,
           api_key: apiKey
         });
+
+        if (requestId !== latestChartRequestId) return;
 
         const rows = Array.isArray(payload?.data) ? payload.data : [];
         if (!rows.length) {
@@ -486,7 +478,7 @@
 
         const transformed = transformGenerationRows(rows);
         if (!transformed.seriesNames.length) {
-          throw new Error(`No usable generation series were returned for ${country}.`);
+          throw new Error(`No usable non-aggregate generation series were returned for ${country}.`);
         }
 
         const traces = transformed.seriesNames.map((name) => ({
@@ -561,19 +553,52 @@
           ]
         };
 
-        await Plotly.newPlot(chartEl, traces, layout, config);
-        setStatus(`Showing ${country}. Returned ${rows.length} records across ${transformed.seriesNames.length} series.`);
+        await Plotly.react(chartEl, traces, layout, config);
+        setStatus(`Showing ${country}. Returned ${transformed.rowCount} non-aggregate records across ${transformed.seriesNames.length} series.`);
       } catch (error) {
+        if (requestId !== latestChartRequestId) return;
         console.error(error);
+        clearChart();
         setStatus(error.message, true);
-        Plotly.purge(chartEl);
-      } finally {
-        refreshBtn.disabled = false;
       }
     }
 
+    function scheduleCountriesLoad() {
+      window.clearTimeout(loadCountriesTimer);
+      loadCountriesTimer = window.setTimeout(() => {
+        loadCountries();
+      }, 350);
+    }
+
+    function scheduleChartLoad() {
+      window.clearTimeout(loadChartTimer);
+      loadChartTimer = window.setTimeout(() => {
+        loadChart();
+      }, 250);
+    }
+
+    apiKeyInput.addEventListener("input", () => {
+      const key = saveApiKey();
+      if (!key) {
+        countriesLoadedForKey = null;
+        countrySelect.disabled = true;
+        countrySelect.innerHTML = '<option value="">Enter API key first</option>';
+        clearChart();
+        setStatus("Enter your API key to load countries and draw the chart.");
+        return;
+      }
+      setStatus("API key saved. Loading countries...");
+      scheduleCountriesLoad();
+    });
+
+    apiKeyInput.addEventListener("change", scheduleCountriesLoad);
+    countrySelect.addEventListener("change", scheduleChartLoad);
+    startYearInput.addEventListener("input", scheduleChartLoad);
+    startYearInput.addEventListener("change", scheduleChartLoad);
+
     if (apiKeyInput.value.trim()) {
-      setStatus("API key found in this browser. Click “Load countries” to begin.");
+      setStatus("API key found in this browser. Loading countries...");
+      loadCountries();
     }
   </script>
 </body>
