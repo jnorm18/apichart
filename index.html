@@ -1307,14 +1307,21 @@
         const hasProj = projValues.some((value) => value !== 0);
 
         if (hasProj) {
+          const bridgeX = [];
+          const bridgeY = [];
+          if (Number.isFinite(histLatestYear)) {
+            bridgeX.push(histLatestYear);
+            bridgeY.push(Number(histMap.get(histLatestYear) ?? 0));
+          }
+
           traces.push({
             type: "scatter",
             mode: "lines",
             name,
             legendgroup: name,
             showlegend: false,
-            x: projYears,
-            y: projValues,
+            x: [...bridgeX, ...projYears],
+            y: [...bridgeY, ...projValues],
             stackgroup: "stack",
             line: {
               width: 1,
