@@ -190,7 +190,7 @@
     .projection-table th,
     .projection-table td {
       border-bottom: 1px solid #edf2f7;
-      padding: 10px 10px;
+      padding: 7px 10px;
       text-align: left;
       vertical-align: middle;
       font-size: 0.92rem;
@@ -227,9 +227,9 @@
     }
 
     .projection-table input[type="number"] {
-      width: 120px;
-      min-height: 38px;
-      padding: 8px 10px;
+      width: 118px;
+      min-height: 34px;
+      padding: 6px 8px;
       text-align: right;
       border-radius: 10px;
       background: #fff;
@@ -286,7 +286,7 @@
     }
 
     .chart-small {
-      min-height: 340px;
+      min-height: 510px;
     }
 
     .chart-empty {
@@ -362,7 +362,7 @@
     @media (max-width: 900px) {
       .span-6, .span-4, .span-3 { grid-column: span 12; }
       .chart-large { min-height: 440px; }
-      .chart-small { min-height: 320px; }
+      .chart-small { min-height: 480px; }
       .projection-summary { grid-template-columns: 1fr; }
     }
   </style>
@@ -373,9 +373,7 @@
       <div class="pill">V2.5 beta • Historical data plus projections and derived charts</div>
       <h1>Electricity generation and capacity explorer</h1>
       <p class="subhead">
-        Generation is pulled from Ember's API. Capacity is pulled from a local yearly file in your repo.
-        This version adds an editable 2030 projection panel, extends both main charts beyond the latest historical year, and adds derived charts for capacity factors and annual capacity additions / retirements.
-        The projected section is shown with lighter fills and a shaded projection band. Capacity starts projecting from its first unavailable year, and generation starts projecting from its own first unavailable year.
+        Generation is pulled from Ember's API. Capacity is pulled from a local file of Ember’s yearly data. This version adds an editable 2030 projection panel, extends both main charts beyond the latest historical year, and adds derived charts for capacity factors and annual capacity additions / retirements. Capacity starts projecting from its first unavailable year, and generation starts projecting from its own first unavailable year.
       </p>
     </div>
 
@@ -473,7 +471,7 @@
       </div>
 
       <div class="projection-note" id="projectionNote">
-        Edit the 2030 capacity and capacity factor assumptions row by row. Capacity factors are derived from the latest common historical year with both capacity and generation data, capped between 0 and 1, and can be edited directly. Capacity is linearly interpolated to 2030, and generation is then calculated from projected capacity and projected capacity factors while staying visually continuous with the latest historical generation year.
+        Edit the 2030 capacity and capacity factor assumptions row by row. Capacity factors are derived from the latest common historical year with both capacity and generation data, capped between 0 and 1, and can be edited directly. Capacity is linearly interpolated to 2030, and generation is then calculated from projected capacity and projected capacity factors.
       </div>
     </section>
 
@@ -532,6 +530,8 @@
       "Solar",
       "Other renewables"
     ];
+
+    const EXCLUDED_SERIES = new Set(["net imports"]);
 
     const SERIES_ALIASES = {
       "other fossil": "Other fossil",
@@ -751,6 +751,10 @@
       return alias || cleaned;
     }
 
+    function isExcludedSeriesName(name) {
+      return EXCLUDED_SERIES.has(String(name || "").trim().toLowerCase());
+    }
+
     function seriesSortKey(name) {
       const index = SERIES_ORDER.findIndex((item) => item.toLowerCase() === String(name).toLowerCase());
       return index === -1 ? 999 : index;
@@ -949,16 +953,20 @@
     }
 
     function transformGenerationRows(rows) {
-      const filteredRows = rows.filter((row) => row?.is_aggregate_series === false);
+      const filteredRows = rows.filter((row) => {
+        if (row?.is_aggregate_series !== false) return false;
+        const name = normaliseSeriesName(row?.series);
+        return !isExcludedSeriesName(name);
+      });
       const years = [...new Set(filteredRows.map((row) => Number(row.date)).filter(Number.isFinite))].sort((a, b) => a - b);
-      const seriesNames = [...new Set(filteredRows.map((row) => cleanSeriesName(row.series)).filter(Boolean))]
+      const seriesNames = [...new Set(filteredRows.map((row) => normaliseSeriesName(row.series)).filter((name) => name && !isExcludedSeriesName(name)))]
         .sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
 
       const valuesBySeries = new Map(seriesNames.map((name) => [name, new Map(years.map((year) => [year, 0]))]));
 
       for (const row of filteredRows) {
         const year = Number(row.date);
-        const name = cleanSeriesName(row.series);
+        const name = normaliseSeriesName(row.series);
         if (!valuesBySeries.has(name) || !Number.isFinite(year)) continue;
         const value = Number(row.generation_twh ?? 0);
         valuesBySeries.get(name).set(year, Number.isFinite(value) ? value : 0);
@@ -1633,7 +1641,7 @@
             x: projYears,
             y: projValues,
             marker: {
-              color: hexToRgba(seriesColor(name), 0.45),
+              color: hexToRgba(seriesColor(name), 0.725),
               line: { width: 0 }
             },
             hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{y:.2f} GW<extra></extra>`
@@ -1757,7 +1765,7 @@
             color: seriesColor(name),
             dash: "dash"
           },
-          fillcolor: hexToRgba(seriesColor(name), 0.45),
+          fillcolor: hexToRgba(seriesColor(name), 0.725),
           customdata: projectedSeriesWithAnchor,
           hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{customdata:.${decimals}f} ${valueSuffix}<extra></extra>`
         });
@@ -1826,7 +1834,7 @@
       if (!additionsData.traces.length) {
         showChartMessage(additionsChartEl, `No annual additions or retirements series could be derived for ${country}.`);
       } else {
-        const additionsLayout = baseLayout(`Annual capacity additions / retirements in ${country}`, "Positive bars show additions. Negative bars show retirements. Projected years follow the editable 2030 capacity assumptions.", additionsData.latestHistoricalYear);
+        const additionsLayout = baseLayout(`Annual net capacity additions / retirements in ${country}`, "Positive bars show additions. Negative bars show retirements. Projected years follow the editable 2030 capacity assumptions.", additionsData.latestHistoricalYear);
         additionsLayout.barmode = "relative";
         additionsLayout.bargap = 0.15;
         additionsLayout.legend.traceorder = "normal";
