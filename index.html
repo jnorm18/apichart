@@ -503,11 +503,11 @@
 
     <p class="footer-note">
       Repo setup for the capacity chart: add a file at <code class="inline-code">data/capacity_yearly.csv</code>.
-      The important columns are <code class="inline-code">Area</code>, <code class="inline-code">Year</code>,
-      <code class="inline-code">Category</code>, <code class="inline-code">Subcategory</code>, <code class="inline-code">Variable</code>,
-      <code class="inline-code">Unit</code>, and <code class="inline-code">Value</code>. This page keeps only
-      <code class="inline-code">Category = Capacity</code>, <code class="inline-code">Subcategory = Fuel</code>, and
-      <code class="inline-code">Unit = GW</code>.
+      The important columns are <code class="inline-code">Area</code>, <code class="inline-code">ISO 3 code</code>,
+      <code class="inline-code">Year</code>, <code class="inline-code">Variable</code>, <code class="inline-code">Unit</code>,
+      and <code class="inline-code">Value</code>. This page keeps <code class="inline-code">Unit = GW</code> rows and now tries to
+      reconcile Ember dropdown names to the local capacity file using <code class="inline-code">ISO 3 code</code>, exact names,
+      normalised names, and a small alias table for common naming differences such as United States / United States of America.
     </p>
   </div>
 
@@ -595,10 +595,14 @@
     let latestCountriesRequestId = 0;
     let latestChartsRequestId = 0;
     let capacityDataPromise = null;
+    let capacityLookupPromise = null;
     let projectionInputUpdateTimer = null;
 
     let appState = {
       country: null,
+      countryEntity: null,
+      capacityArea: null,
+      capacityIso: null,
       startYear: null,
       historical: null,
       projection: null
@@ -657,6 +661,173 @@
       return capacityDataPromise;
     }
 
+    const COUNTRY_NAME_ALIASES = {
+      "united states": "united states of america",
+      "usa": "united states of america",
+      "us": "united states of america",
+      "uk": "united kingdom",
+      "vietnam": "viet nam",
+      "russia": "russian federation",
+      "iran": "iran islamic republic of",
+      "syria": "syrian arab republic of",
+      "laos": "lao peoples democratic republic",
+      "north korea": "korea democratic peoples republic of",
+      "south korea": "south korea",
+      "tanzania": "tanzania united republic of",
+      "venezuela": "venezuela bolivarian republic of",
+      "bahamas": "bahamas",
+      "gambia": "gambia",
+      "philippines": "philippines",
+      "czech republic": "czechia",
+      "cape verde": "cabo verde",
+      "brunei": "brunei darussalam",
+      "palestine": "palestine state of"
+    };
+
+    function extractIso3(value) {
+      const text = String(value || "").trim().toUpperCase();
+      return /^[A-Z]{3}$/.test(text) ? text : null;
+    }
+
+    function normaliseCountryKey(name) {
+      const normalised = String(name || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\[[^\]]*\]/g, " ")
+        .replace(/[()]/g, " ")
+        .replace(/&/g, " and ")
+        .replace(/[’']/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .replace(/\bthe\b/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return COUNTRY_NAME_ALIASES[normalised] || normalised;
+    }
+
+    function buildCapacityLookup(rows) {
+      const byIso = new Map();
+      const byArea = new Map();
+      const byNormalisedArea = new Map();
+
+      rows.forEach((row) => {
+        const area = String(row.Area || row.area || "").trim();
+        const iso = extractIso3(row["ISO 3 code"] || row.iso3 || row.iso_3_code || row.ISO3 || row.code);
+        if (!area) return;
+
+        if (!byArea.has(area)) {
+          byArea.set(area, { area, iso });
+        }
+
+        const normalisedArea = normaliseCountryKey(area);
+        if (normalisedArea) {
+          const matches = byNormalisedArea.get(normalisedArea) || [];
+          if (!matches.some((item) => item.area === area)) {
+            matches.push({ area, iso });
+          }
+          byNormalisedArea.set(normalisedArea, matches);
+        }
+
+        if (iso) {
+          const matches = byIso.get(iso) || [];
+          if (!matches.some((item) => item.area === area)) {
+            matches.push({ area, iso });
+          }
+          byIso.set(iso, matches);
+        }
+      });
+
+      return { byIso, byArea, byNormalisedArea };
+    }
+
+    function loadCapacityLookup() {
+      if (!capacityLookupPromise) {
+        capacityLookupPromise = loadCapacityData().then((rows) => buildCapacityLookup(rows));
+      }
+      return capacityLookupPromise;
+    }
+
+    function extractOptionIso3(option) {
+      if (!option || typeof option === "string") return extractIso3(option);
+
+      const isoCandidates = [
+        option.iso3,
+        option.iso_3,
+        option.iso_3_code,
+        option.iso_code,
+        option.alpha3,
+        option.alpha_3,
+        option.country_code,
+        option.countryCode,
+        option.code,
+        option.value
+      ];
+
+      for (const candidate of isoCandidates) {
+        const iso = extractIso3(candidate);
+        if (iso) return iso;
+      }
+
+      return null;
+    }
+
+    function getUniqueCapacityMatch(matches) {
+      if (!Array.isArray(matches) || !matches.length) return null;
+      return matches.length === 1 ? matches[0] : null;
+    }
+
+    function resolveCapacityMatch(option, capacityLookup) {
+      const label = typeof option === "string"
+        ? String(option).trim()
+        : String(option.label || option.name || option.entity || option.value || option.title || "").trim();
+      const value = typeof option === "string"
+        ? String(option).trim()
+        : String(option.value || option.entity || option.label || option.name || option.title || "").trim();
+
+      const explicitIso = extractOptionIso3(option);
+      if (explicitIso) {
+        const isoMatch = getUniqueCapacityMatch(capacityLookup.byIso.get(explicitIso));
+        if (isoMatch) return isoMatch;
+      }
+
+      const exactAreaMatch = capacityLookup.byArea.get(label) || capacityLookup.byArea.get(value);
+      if (exactAreaMatch) return exactAreaMatch;
+
+      const normalisedCandidates = [normaliseCountryKey(label), normaliseCountryKey(value)].filter(Boolean);
+
+      for (const key of normalisedCandidates) {
+        const exactNormalisedMatch = getUniqueCapacityMatch(capacityLookup.byNormalisedArea.get(key));
+        if (exactNormalisedMatch) return exactNormalisedMatch;
+      }
+
+      for (const key of normalisedCandidates) {
+        const fuzzyMatches = [];
+
+        for (const [normalisedArea, matches] of capacityLookup.byNormalisedArea.entries()) {
+          const related = normalisedArea.startsWith(key) || key.startsWith(normalisedArea) || normalisedArea.includes(key) || key.includes(normalisedArea);
+          if (related) {
+            matches.forEach((match) => fuzzyMatches.push(match));
+          }
+        }
+
+        const uniqueMatches = [];
+        const seenAreas = new Set();
+        fuzzyMatches.forEach((match) => {
+          if (!seenAreas.has(match.area)) {
+            seenAreas.add(match.area);
+            uniqueMatches.push(match);
+          }
+        });
+
+        if (uniqueMatches.length === 1) {
+          return uniqueMatches[0];
+        }
+      }
+
+      return null;
+    }
+
     function extractOptionList(payload) {
       if (Array.isArray(payload)) return payload;
       if (Array.isArray(payload?.data)) return payload.data;
@@ -671,7 +842,7 @@
 
     function normaliseOption(option) {
       if (typeof option === "string") {
-        return { label: option, value: option };
+        return { label: option, value: option, iso3: extractIso3(option), raw: option };
       }
 
       const label = option.label || option.name || option.entity || option.value || option.title;
@@ -679,7 +850,9 @@
 
       return {
         label: label ? String(label) : null,
-        value: value ? String(value) : null
+        value: value ? String(value) : null,
+        iso3: extractOptionIso3(option),
+        raw: option
       };
     }
 
@@ -986,10 +1159,14 @@
       };
     }
 
-    function transformCapacityRows(rows, country, startYear) {
+    function transformCapacityRows(rows, capacitySelection, startYear) {
       const startYearNum = Number(startYear);
+      const capacityArea = String(capacitySelection?.area || "").trim();
+      const capacityIso = extractIso3(capacitySelection?.iso);
+
       const filteredRows = rows.filter((row) => {
         const area = String(row.Area || row.area || "").trim();
+        const rowIso = extractIso3(row["ISO 3 code"] || row.iso3 || row.iso_3_code || row.ISO3 || row.code);
         const year = Number(row.Year || row.year);
         const category = String(row.Category || row.category || "").trim();
         const subcategory = String(row.Subcategory || row.subcategory || "").trim();
@@ -997,7 +1174,10 @@
         const variable = normaliseSeriesName(row.Variable || row.variable || "");
         const value = Number(row.Value || row.value);
 
-        if (!area || area !== country) return false;
+        const areaMatches = capacityArea && area === capacityArea;
+        const isoMatches = capacityIso && rowIso === capacityIso;
+
+        if (!area || (!areaMatches && !isoMatches)) return false;
         if (!Number.isFinite(year) || year < startYearNum) return false;
         if (!variable) return false;
         if (!Number.isFinite(value)) return false;
@@ -1844,10 +2024,10 @@
       }
     }
 
-    async function loadHistoricalData(country, startYear, apiKey) {
+    async function loadHistoricalData(selection, startYear, apiKey) {
       const [generationPayload, capacityRows] = await Promise.all([
         fetchJson("/electricity-generation/yearly", {
-          entity: country,
+          entity: selection.generationEntity,
           start_date: startYear,
           is_aggregate_series: false,
           include_all_dates_value_range: true,
@@ -1858,14 +2038,18 @@
 
       const generationRows = Array.isArray(generationPayload?.data) ? generationPayload.data : [];
       if (!generationRows.length) {
-        throw new Error(`No generation rows were returned for ${country}.`);
+        throw new Error(`No generation rows were returned for ${selection.countryLabel}.`);
       }
 
       const generation = transformGenerationRows(generationRows);
-      const capacity = transformCapacityRows(capacityRows, country, startYear);
+      const capacity = transformCapacityRows(capacityRows, {
+        area: selection.capacityArea,
+        iso: selection.capacityIso
+      }, startYear);
 
       if (!capacity.rowCount) {
-        throw new Error(`No local yearly capacity rows matched ${country}. Check the country names in your CSV.`);
+        const capacityLabel = selection.capacityArea || selection.capacityIso || selection.countryLabel;
+        throw new Error(`No local yearly capacity rows matched ${selection.countryLabel}. Resolved local capacity key: ${capacityLabel}.`);
       }
 
       return { generation, capacity };
@@ -1895,35 +2079,58 @@
       setStatus("Loading countries from Ember...");
 
       try {
-        const payload = await fetchJson("/options/electricity-generation/yearly/entity", { api_key: apiKey });
+        const [payload, capacityLookup] = await Promise.all([
+          fetchJson("/options/electricity-generation/yearly/entity", { api_key: apiKey }),
+          loadCapacityLookup()
+        ]);
         if (requestId !== latestCountriesRequestId) return;
 
-        const options = uniqueSortedOptions(extractOptionList(payload));
-        if (!options.length) {
+        const allOptions = uniqueSortedOptions(extractOptionList(payload));
+        if (!allOptions.length) {
           throw new Error("No country options were returned. The options response format may be different than expected.");
+        }
+
+        const matchedOptions = allOptions
+          .map((option) => {
+            const resolvedCapacity = resolveCapacityMatch(option.raw || option, capacityLookup);
+            return {
+              ...option,
+              capacityArea: resolvedCapacity?.area || null,
+              capacityIso: resolvedCapacity?.iso || option.iso3 || null
+            };
+          })
+          .filter((option) => option.capacityArea || option.capacityIso);
+
+        if (!matchedOptions.length) {
+          throw new Error("No Ember geographies could be reconciled to the local capacity CSV.");
         }
 
         countrySelect.innerHTML = "";
         let defaultFound = false;
 
-        for (const option of options) {
+        for (const option of matchedOptions) {
           const el = document.createElement("option");
           el.value = option.value;
           el.textContent = option.label;
-          if (option.label === DEFAULT_COUNTRY || option.value === DEFAULT_COUNTRY) {
+          el.dataset.countryLabel = option.label;
+          if (option.capacityArea) el.dataset.capacityArea = option.capacityArea;
+          if (option.capacityIso) el.dataset.capacityIso = option.capacityIso;
+
+          if (option.label === DEFAULT_COUNTRY || option.value === DEFAULT_COUNTRY || option.capacityArea === DEFAULT_COUNTRY) {
             el.selected = true;
             defaultFound = true;
           }
           countrySelect.appendChild(el);
         }
 
-        if (!defaultFound && options.length) {
-          countrySelect.value = options[0].value;
+        if (!defaultFound && matchedOptions.length) {
+          countrySelect.value = matchedOptions[0].value;
         }
 
         countriesLoadedForKey = apiKey;
         countrySelect.disabled = false;
-        setStatus(`Loaded ${options.length} countries/regions. Updating charts...`);
+        const unmatchedCount = Math.max(allOptions.length - matchedOptions.length, 0);
+        setStatus(`Loaded ${matchedOptions.length} countries/regions with matched local capacity data${unmatchedCount ? ` (${unmatchedCount} Ember options were excluded because they had no local capacity match)` : ""}. Updating charts...`);
         await loadCharts();
       } catch (error) {
         if (requestId !== latestCountriesRequestId) return;
@@ -1938,7 +2145,11 @@
 
     async function loadCharts() {
       const apiKey = getApiKey();
-      const country = countrySelect.value;
+      const selectedOption = countrySelect.selectedOptions?.[0] || null;
+      const generationEntity = countrySelect.value;
+      const countryLabel = selectedOption?.dataset?.countryLabel || selectedOption?.textContent || generationEntity;
+      const capacityArea = selectedOption?.dataset?.capacityArea || countryLabel;
+      const capacityIso = selectedOption?.dataset?.capacityIso || null;
       const startYear = startYearInput.value.trim() || "2000";
       const requestId = ++latestChartsRequestId;
 
@@ -1948,29 +2159,38 @@
         return;
       }
 
-      if (!country) {
+      if (!generationEntity) {
         clearCharts();
         setStatus("Choose a country or region.");
         return;
       }
 
-      setStatus(`Loading historical data and rebuilding projections for ${country}...`);
+      setStatus(`Loading historical data and rebuilding projections for ${countryLabel}...`);
 
       try {
-        const historical = await loadHistoricalData(country, startYear, apiKey);
+        const historical = await loadHistoricalData({
+          generationEntity,
+          countryLabel,
+          capacityArea,
+          capacityIso
+        }, startYear, apiKey);
         if (requestId !== latestChartsRequestId) return;
 
-        appState.country = country;
+        appState.country = countryLabel;
+        appState.countryEntity = generationEntity;
+        appState.capacityArea = capacityArea;
+        appState.capacityIso = capacityIso;
         appState.startYear = startYear;
         appState.historical = historical;
-        appState.projection = reconcileProjectionModel(appState.projection, country, historical);
+        appState.projection = reconcileProjectionModel(appState.projection, countryLabel, historical);
 
         renderProjectionTable();
         await drawChartsFromState();
 
         setStatus(
-          `Showing ${country}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
-          `Capacity: ${historical.capacity.rowCount} yearly rows. Projection now extends the main charts to ${TARGET_YEAR}, with linked capacity factor and additions / retirements charts below.`
+          `Showing ${countryLabel}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
+          `Capacity: ${historical.capacity.rowCount} yearly rows${capacityArea && capacityArea !== countryLabel ? ` (matched to local capacity area "${capacityArea}")` : ""}. ` +
+          `Projection now extends the main charts to ${TARGET_YEAR}, with linked capacity factor and additions / retirements charts below.`
         );
       } catch (error) {
         if (requestId !== latestChartsRequestId) return;
