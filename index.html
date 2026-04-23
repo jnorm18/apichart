@@ -1847,7 +1847,6 @@
         });
         applyTraceUiState(generationTraces, "generation", generationVisibility);
         const generationLayout = baseLayout(`Electricity generation in ${country}`, "Terawatt-hours", generationHist.latestYear);
-        generationLayout.uirevision = `${country}|generation`;
         await Plotly.react(generationChartEl, generationTraces, generationLayout, commonChartConfig());
         generationMetaEl.textContent = generationHist.latestYear < TARGET_YEAR
           ? `Latest historical year: ${generationHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
@@ -1865,7 +1864,6 @@
         });
         applyTraceUiState(capacityTraces, "capacity", capacityVisibility);
         const capacityLayout = baseLayout(`Installed capacity in ${country}`, "Gigawatts", capacityHist.latestYear);
-        capacityLayout.uirevision = `${country}|capacity`;
         await Plotly.react(capacityChartEl, capacityTraces, capacityLayout, commonChartConfig());
         capacityMetaEl.textContent = capacityHist.latestYear < TARGET_YEAR
           ? `Latest historical year: ${capacityHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
@@ -1878,7 +1876,6 @@
       } else {
         applyTraceUiState(cfData.traces, "capacity-factor", capacityFactorVisibility, getDefaultCapacityFactorVisibleSet(4));
         const cfLayout = baseLayout(`Capacity factor in ${country}`, "Historical values use average start- and end-year capacity. Projection follows the editable capacity factor assumptions.", cfData.latestHistoricalYear);
-        cfLayout.uirevision = `${country}|capacity-factor`;
         cfLayout.yaxis.tickformat = ".0%";
         cfLayout.yaxis.range = [0, null];
         cfLayout.legend.traceorder = "normal";
@@ -1895,7 +1892,6 @@
       } else {
         applyTraceUiState(additionsData.traces, "additions", additionsVisibility);
         const additionsLayout = baseLayout(`Annual capacity additions / retirements in ${country}`, "Positive bars show additions. Negative bars show retirements. Projected years follow the editable 2030 capacity assumptions.", additionsData.latestHistoricalYear);
-        additionsLayout.uirevision = `${country}|additions`;
         additionsLayout.barmode = "relative";
         additionsLayout.bargap = 0.15;
         additionsLayout.legend.traceorder = "normal";
