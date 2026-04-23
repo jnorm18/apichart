@@ -261,9 +261,15 @@
 
     .charts-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 18px;
-      align-items: stretch;
+      align-items: start;
+    }
+
+    .chart-column {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
     }
 
     .chart-card {
@@ -272,11 +278,20 @@
 
     .chart {
       width: 100%;
-      min-height: 580px;
+      min-height: 360px;
+    }
+
+    .chart-large {
+      min-height: 500px;
+    }
+
+    .chart-small {
+      min-height: 340px;
     }
 
     .chart-empty {
-      min-height: 580px;
+      min-height: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -346,7 +361,8 @@
 
     @media (max-width: 900px) {
       .span-6, .span-4, .span-3 { grid-column: span 12; }
-      .chart, .chart-empty { min-height: 500px; }
+      .chart-large { min-height: 440px; }
+      .chart-small { min-height: 320px; }
       .projection-summary { grid-template-columns: 1fr; }
     }
   </style>
@@ -354,11 +370,11 @@
 <body>
   <div class="page">
     <div class="header">
-      <div class="pill">V2.3 beta • Historical data plus editable projections to 2030</div>
+      <div class="pill">V2.5 beta • Historical data plus projections and derived charts</div>
       <h1>Electricity generation and capacity explorer</h1>
       <p class="subhead">
         Generation is pulled from Ember's API. Capacity is pulled from a local yearly file in your repo.
-        This version adds an editable 2030 projection panel and extends both charts beyond the latest historical year.
+        This version adds an editable 2030 projection panel, extends both main charts beyond the latest historical year, and adds derived charts for capacity factors and annual capacity additions / retirements.
         The projected section is shown with lighter fills and a shaded projection band. Capacity starts projecting from its first unavailable year, and generation starts projecting from its own first unavailable year.
       </p>
     </div>
@@ -462,15 +478,29 @@
     </section>
 
     <section class="charts-grid">
-      <section class="card chart-card">
-        <div id="generationChart" class="chart"></div>
-        <div id="generationMeta" class="chart-meta"></div>
-      </section>
+      <div class="chart-column">
+        <section class="card chart-card">
+          <div id="generationChart" class="chart chart-large"></div>
+          <div id="generationMeta" class="chart-meta"></div>
+        </section>
 
-      <section class="card chart-card">
-        <div id="capacityChart" class="chart"></div>
-        <div id="capacityMeta" class="chart-meta"></div>
-      </section>
+        <section class="card chart-card">
+          <div id="capacityFactorChart" class="chart chart-small"></div>
+          <div id="capacityFactorMeta" class="chart-meta"></div>
+        </section>
+      </div>
+
+      <div class="chart-column">
+        <section class="card chart-card">
+          <div id="capacityChart" class="chart chart-large"></div>
+          <div id="capacityMeta" class="chart-meta"></div>
+        </section>
+
+        <section class="card chart-card">
+          <div id="additionsChart" class="chart chart-small"></div>
+          <div id="additionsMeta" class="chart-meta"></div>
+        </section>
+      </div>
     </section>
 
     <p class="footer-note">
@@ -541,8 +571,12 @@
     const statusEl = document.getElementById("status");
     const generationChartEl = document.getElementById("generationChart");
     const capacityChartEl = document.getElementById("capacityChart");
+    const capacityFactorChartEl = document.getElementById("capacityFactorChart");
+    const additionsChartEl = document.getElementById("additionsChart");
     const generationMetaEl = document.getElementById("generationMeta");
     const capacityMetaEl = document.getElementById("capacityMeta");
+    const capacityFactorMetaEl = document.getElementById("capacityFactorMeta");
+    const additionsMetaEl = document.getElementById("additionsMeta");
 
     const resetProjectionBtn = document.getElementById("resetProjectionBtn");
     const projectionTableBody = document.getElementById("projectionTableBody");
@@ -686,11 +720,15 @@
     function clearMeta() {
       generationMetaEl.textContent = "";
       capacityMetaEl.textContent = "";
+      capacityFactorMetaEl.textContent = "";
+      additionsMetaEl.textContent = "";
     }
 
     function clearCharts() {
       clearChart(generationChartEl);
       clearChart(capacityChartEl);
+      clearChart(capacityFactorChartEl);
+      clearChart(additionsChartEl);
       clearMeta();
     }
 
@@ -844,6 +882,18 @@
     function clamp(value, min, max) {
       if (!Number.isFinite(value)) return value;
       return Math.max(min, Math.min(max, value));
+    }
+
+    function isLeapYear(year) {
+      return (year % 4 === 0) && ((year % 100 !== 0) || (year % 400 === 0));
+    }
+
+    function hoursInYear(year) {
+      return (isLeapYear(Number(year)) ? 366 : 365) * 24;
+    }
+
+    function twhPerGwYear(year) {
+      return hoursInYear(year) / 1000;
     }
 
     function getLatestValueForSeries(transformed, seriesName) {
@@ -1354,6 +1404,249 @@
       return { years, valuesBySeries };
     }
 
+    function buildHistoricalCapacityFactorSeries() {
+      const historical = appState.historical;
+      const technologies = Array.from(new Set([
+        ...(historical?.capacity?.seriesNames || []),
+        ...(historical?.generation?.seriesNames || [])
+      ])).sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+
+      const yearSet = new Set([
+        ...(historical?.capacity?.years || []),
+        ...(historical?.generation?.years || [])
+      ]);
+      const years = Array.from(yearSet).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+      const valuesBySeries = new Map();
+      let latestYear = null;
+
+      technologies.forEach((technology) => {
+        const capMap = historical?.capacity?.valuesBySeries?.get(technology) || new Map();
+        const genMap = historical?.generation?.valuesBySeries?.get(technology) || new Map();
+        const cfMap = new Map();
+
+        years.forEach((year) => {
+          const capEnd = Number(capMap.get(year));
+          const generation = Number(genMap.get(year));
+          if (!Number.isFinite(capEnd) || capEnd <= 0 || !Number.isFinite(generation) || generation < 0) {
+            return;
+          }
+
+          let capStart = Number(capMap.get(year - 1));
+          if (!Number.isFinite(capStart) || capStart <= 0) {
+            capStart = capEnd;
+          }
+
+          const capAvg = (capStart + capEnd) / 2;
+          const cf = capAvg > 0 ? generation / (capAvg * twhPerGwYear(year)) : null;
+          if (Number.isFinite(cf)) {
+            cfMap.set(year, cf);
+            latestYear = Number.isFinite(latestYear) ? Math.max(latestYear, year) : year;
+          }
+        });
+
+        valuesBySeries.set(technology, cfMap);
+      });
+
+      return {
+        years,
+        seriesNames: technologies,
+        valuesBySeries,
+        latestYear
+      };
+    }
+
+    function buildProjectedCapacityFactorSeries(projection) {
+      const years = [];
+      const latestCfYear = projection.rows.reduce((maxYear, row) => {
+        const year = Number(row.latestCfYear);
+        return Number.isFinite(year) ? Math.max(maxYear, year) : maxYear;
+      }, -Infinity);
+      const projectionStartYear = Number.isFinite(latestCfYear) ? latestCfYear + 1 : null;
+
+      if (!Number.isFinite(projectionStartYear) || projectionStartYear > TARGET_YEAR) {
+        return { years, valuesBySeries: new Map(), latestYear: Number.isFinite(latestCfYear) ? latestCfYear : null };
+      }
+
+      for (let year = projectionStartYear; year <= TARGET_YEAR; year += 1) {
+        years.push(year);
+      }
+
+      const valuesBySeries = new Map();
+      projection.rows.forEach((row) => {
+        const baseYear = Number.isFinite(Number(row.latestCfYear)) ? Number(row.latestCfYear) : latestCfYear;
+        const startValue = Number.isFinite(row.latestCf) ? Number(row.latestCf) : getEffectiveCfTarget(row);
+        const targetValue = getEffectiveCfTarget(row);
+        const map = new Map();
+        years.forEach((year) => {
+          map.set(year, clamp(interpolateLinearToTarget(baseYear, startValue, targetValue, year), 0, 1));
+        });
+        valuesBySeries.set(row.technology, map);
+      });
+
+      return { years, valuesBySeries, latestYear: latestCfYear };
+    }
+
+    function buildCapacityChangeSeries(projection, capacityHistorical) {
+      const projectedCapacity = capacityHistorical.latestYear < TARGET_YEAR
+        ? buildProjectedSeriesMap(projection, { ...capacityHistorical, kind: "capacity" })
+        : { years: [], valuesBySeries: new Map() };
+
+      const seriesNames = Array.from(new Set([
+        ...(capacityHistorical.seriesNames || []),
+        ...(projection?.rows || []).map((row) => row.technology)
+      ])).sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+
+      const allYears = Array.from(new Set([
+        ...(capacityHistorical.years || []),
+        ...(projectedCapacity.years || [])
+      ])).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+
+      const valuesBySeries = new Map();
+
+      seriesNames.forEach((name) => {
+        const histMap = capacityHistorical.valuesBySeries.get(name) || new Map();
+        const projMap = projectedCapacity.valuesBySeries.get(name) || new Map();
+        const changesMap = new Map();
+        let prevValue = null;
+
+        allYears.forEach((year) => {
+          const currentValue = Number((projMap.has(year) ? projMap.get(year) : histMap.get(year)) ?? 0);
+          if (prevValue === null) {
+            changesMap.set(year, 0);
+          } else {
+            changesMap.set(year, currentValue - prevValue);
+          }
+          prevValue = currentValue;
+        });
+
+        valuesBySeries.set(name, changesMap);
+      });
+
+      return {
+        years: allYears,
+        seriesNames,
+        valuesBySeries,
+        latestHistoricalYear: capacityHistorical.latestYear
+      };
+    }
+
+    function buildCapacityFactorLineTraces() {
+      const cfHistorical = buildHistoricalCapacityFactorSeries();
+      const cfProjected = buildProjectedCapacityFactorSeries(appState.projection);
+      const traces = [];
+
+      const seriesNames = Array.from(new Set([
+        ...(cfHistorical.seriesNames || []),
+        ...(appState.projection?.rows || []).map((row) => row.technology)
+      ])).sort((a, b) => seriesSortKey(a) - seriesSortKey(b) || a.localeCompare(b));
+
+      seriesNames.forEach((name) => {
+        const histMap = cfHistorical.valuesBySeries.get(name) || new Map();
+        const histYears = (cfHistorical.years || []).filter((year) => histMap.has(year));
+        const histValues = histYears.map((year) => Number(histMap.get(year)));
+        const hasHist = histValues.some((value) => Number.isFinite(value));
+
+        if (hasHist) {
+          traces.push({
+            type: "scatter",
+            mode: "lines",
+            name,
+            legendgroup: name,
+            x: histYears,
+            y: histValues,
+            line: {
+              width: 2,
+              color: seriesColor(name)
+            },
+            hovertemplate: `%{fullData.name}<br>%{x}: %{y:.1%}<extra></extra>`
+          });
+        }
+
+        const projMap = cfProjected.valuesBySeries.get(name) || new Map();
+        const projYears = (cfProjected.years || []).filter((year) => projMap.has(year));
+        const projValues = projYears.map((year) => Number(projMap.get(year)));
+        const hasProj = projValues.some((value) => Number.isFinite(value));
+
+        if (hasProj) {
+          const anchorYear = histYears.length ? histYears[histYears.length - 1] : null;
+          const anchorValue = anchorYear !== null ? Number(histMap.get(anchorYear)) : null;
+          const x = anchorYear !== null ? [anchorYear, ...projYears] : projYears;
+          const y = anchorYear !== null ? [anchorValue, ...projValues] : projValues;
+          traces.push({
+            type: "scatter",
+            mode: "lines",
+            name,
+            legendgroup: name,
+            showlegend: false,
+            x,
+            y,
+            line: {
+              width: 2,
+              color: seriesColor(name),
+              dash: "dash"
+            },
+            hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{y:.1%}<extra></extra>`
+          });
+        }
+      });
+
+      return {
+        traces,
+        latestHistoricalYear: cfHistorical.latestYear
+      };
+    }
+
+    function buildAdditionsBarTraces() {
+      const changeData = buildCapacityChangeSeries(appState.projection, appState.historical.capacity);
+      const traces = [];
+      const histYears = (changeData.years || []).filter((year) => year <= changeData.latestHistoricalYear);
+      const projYears = (changeData.years || []).filter((year) => year > changeData.latestHistoricalYear);
+
+      changeData.seriesNames.forEach((name) => {
+        const map = changeData.valuesBySeries.get(name) || new Map();
+        const histValues = histYears.map((year) => Number(map.get(year) ?? 0));
+        const projValues = projYears.map((year) => Number(map.get(year) ?? 0));
+        const hasHist = histValues.some((value) => value !== 0);
+        const hasProj = projValues.some((value) => value !== 0);
+
+        if (hasHist) {
+          traces.push({
+            type: "bar",
+            name,
+            legendgroup: name,
+            x: histYears,
+            y: histValues,
+            marker: {
+              color: hexToRgba(seriesColor(name), 0.9),
+              line: { width: 0 }
+            },
+            hovertemplate: `%{fullData.name}<br>%{x}: %{y:.2f} GW<extra></extra>`
+          });
+        }
+
+        if (hasProj) {
+          traces.push({
+            type: "bar",
+            name,
+            legendgroup: name,
+            showlegend: false,
+            x: projYears,
+            y: projValues,
+            marker: {
+              color: hexToRgba(seriesColor(name), 0.45),
+              line: { width: 0 }
+            },
+            hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{y:.2f} GW<extra></extra>`
+          });
+        }
+      });
+
+      return {
+        traces,
+        latestHistoricalYear: changeData.latestHistoricalYear
+      };
+    }
+
     function buildStackedAreaTraces({ historical, projection, valueSuffix, decimals = 1 }) {
       const traces = [];
 
@@ -1513,6 +1806,34 @@
           ? `Latest historical year: ${capacityHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
           : `Latest historical year: ${capacityHist.latestYear}.`;
       }
+
+      const cfData = buildCapacityFactorLineTraces();
+      if (!cfData.traces.length) {
+        showChartMessage(capacityFactorChartEl, `No capacity factor series could be derived for ${country}.`);
+      } else {
+        const cfLayout = baseLayout(`Capacity factor in ${country}`, "Historical values use average start- and end-year capacity. Projection follows the editable capacity factor assumptions.", cfData.latestHistoricalYear);
+        cfLayout.yaxis.tickformat = ".0%";
+        cfLayout.yaxis.range = [0, null];
+        cfLayout.legend.traceorder = "normal";
+        cfLayout.margin = { l: 62, r: 18, t: 94, b: 48 };
+        await Plotly.react(capacityFactorChartEl, cfData.traces, cfLayout, commonChartConfig());
+        capacityFactorMetaEl.textContent = Number.isFinite(cfData.latestHistoricalYear)
+          ? `Latest historical capacity factor year: ${cfData.latestHistoricalYear}. Historical values use a midyear capacity assumption. Projected values interpolate the user-edited capacity factors to ${TARGET_YEAR}.`
+          : `Projected values interpolate the user-edited capacity factors to ${TARGET_YEAR}.`;
+      }
+
+      const additionsData = buildAdditionsBarTraces();
+      if (!additionsData.traces.length) {
+        showChartMessage(additionsChartEl, `No annual additions or retirements series could be derived for ${country}.`);
+      } else {
+        const additionsLayout = baseLayout(`Annual capacity additions / retirements in ${country}`, "Positive bars show additions. Negative bars show retirements. Projected years follow the editable 2030 capacity assumptions.", additionsData.latestHistoricalYear);
+        additionsLayout.barmode = "relative";
+        additionsLayout.bargap = 0.15;
+        additionsLayout.legend.traceorder = "normal";
+        additionsLayout.margin = { l: 62, r: 18, t: 94, b: 48 };
+        await Plotly.react(additionsChartEl, additionsData.traces, additionsLayout, commonChartConfig());
+        additionsMetaEl.textContent = `Year-on-year change in installed capacity by technology. Historical bars run through ${capacityHist.latestYear}; projected bars start in ${capacityHist.latestYear + 1}.`;
+      }
     }
 
     async function loadHistoricalData(country, startYear, apiKey) {
@@ -1641,7 +1962,7 @@
 
         setStatus(
           `Showing ${country}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
-          `Capacity: ${historical.capacity.rowCount} yearly rows. Projection now extends both charts to ${TARGET_YEAR}.`
+          `Capacity: ${historical.capacity.rowCount} yearly rows. Projection now extends the main charts to ${TARGET_YEAR}, with linked capacity factor and additions / retirements charts below.`
         );
       } catch (error) {
         if (requestId !== latestChartsRequestId) return;
@@ -1650,8 +1971,12 @@
         setStatus(error.message, true);
         generationMetaEl.textContent = "";
         capacityMetaEl.textContent = "";
+        capacityFactorMetaEl.textContent = "";
+        additionsMetaEl.textContent = "";
         showChartMessage(generationChartEl, error.message || "Could not load generation chart.");
         showChartMessage(capacityChartEl, error.message || "Could not load capacity chart.");
+        showChartMessage(capacityFactorChartEl, error.message || "Could not load capacity factor chart.");
+        showChartMessage(additionsChartEl, error.message || "Could not load additions / retirements chart.");
       }
     }
 
@@ -1761,6 +2086,8 @@
     } else {
       showChartMessage(generationChartEl, "Generation chart will appear here after you enter your API key.");
       showChartMessage(capacityChartEl, "Capacity chart will appear here after you enter your API key.");
+      showChartMessage(capacityFactorChartEl, "Capacity factor chart will appear here after you enter your API key.");
+      showChartMessage(additionsChartEl, "Additions / retirements chart will appear here after you enter your API key.");
     }
   </script>
 </body>
