@@ -2010,12 +2010,14 @@
       }
     }
 
-    async function loadCharts() {
+    async function loadCharts(overrides = {}) {
       const apiKey = getApiKey();
-      const { entityValue: countryEntity, displayLabel: countryLabel } = getSelectedCountryContext();
-      const startYear = startYearInput.value.trim() || "2000";
+      const selectedContext = getSelectedCountryContext();
+      const countryEntity = String(overrides.countryEntity ?? selectedContext.entityValue ?? "").trim();
+      const countryLabel = String(overrides.countryLabel ?? selectedContext.displayLabel ?? countryEntity).trim();
+      const startYear = String(overrides.startYear ?? (startYearInput.value.trim() || "2000")).trim();
       const previousCountryEntity = appState.countryEntity;
-      const countryChanged = !!previousCountryEntity && previousCountryEntity !== countryEntity;
+      const countryChanged = overrides.forceCountryChange === true || (!!previousCountryEntity && previousCountryEntity !== countryEntity);
       const requestId = ++latestChartsRequestId;
 
       if (!apiKey) {
@@ -2078,6 +2080,31 @@
     function scheduleChartsLoad() {
       window.clearTimeout(loadChartsTimer);
       loadChartsTimer = window.setTimeout(() => loadCharts(), 250);
+    }
+
+    async function handleCountryChange() {
+      window.clearTimeout(loadChartsTimer);
+      window.clearTimeout(projectionInputUpdateTimer);
+
+      const { entityValue: countryEntity, displayLabel: countryLabel } = getSelectedCountryContext();
+      const startYear = startYearInput.value.trim() || "2000";
+
+      appState.country = null;
+      appState.countryEntity = null;
+      appState.historical = null;
+      appState.projection = null;
+
+      clearCharts();
+      renderProjectionSummary(null, null);
+      renderProjectionTable();
+
+      if (!countryEntity) {
+        setStatus("Choose a country or region.");
+        return;
+      }
+
+      setStatus(`Switching to ${countryLabel}...`);
+      await loadCharts({ countryEntity, countryLabel, startYear, forceCountryChange: true });
     }
 
     function updateProjectionFromRowInput(rowIndex, inputType, rawValue, { rerenderTable = false, redrawCharts = false } = {}) {
@@ -2166,10 +2193,7 @@
     });
 
     apiKeyInput.addEventListener("change", scheduleCountriesLoad);
-    countrySelect.addEventListener("change", () => {
-      window.clearTimeout(projectionInputUpdateTimer);
-      scheduleChartsLoad();
-    });
+    countrySelect.addEventListener("change", handleCountryChange);
     startYearInput.addEventListener("input", scheduleChartsLoad);
     startYearInput.addEventListener("change", scheduleChartsLoad);
 
