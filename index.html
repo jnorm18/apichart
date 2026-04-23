@@ -1825,16 +1825,16 @@
       return traces;
     }
 
-    async function drawChartsFromState() {
+    async function drawChartsFromState({ preserveVisibility = true } = {}) {
       if (!appState.historical || !appState.projection || !appState.country) return;
 
       const country = appState.country;
       const generationHist = appState.historical.generation;
       const capacityHist = appState.historical.capacity;
-      const generationVisibility = captureVisibilityState(generationChartEl);
-      const capacityVisibility = captureVisibilityState(capacityChartEl);
-      const capacityFactorVisibility = captureVisibilityState(capacityFactorChartEl);
-      const additionsVisibility = captureVisibilityState(additionsChartEl);
+      const generationVisibility = preserveVisibility ? captureVisibilityState(generationChartEl) : null;
+      const capacityVisibility = preserveVisibility ? captureVisibilityState(capacityChartEl) : null;
+      const capacityFactorVisibility = preserveVisibility ? captureVisibilityState(capacityFactorChartEl) : null;
+      const additionsVisibility = preserveVisibility ? captureVisibilityState(additionsChartEl) : null;
 
       if (!generationHist.seriesNames.length) {
         showChartMessage(generationChartEl, `No usable generation series were returned for ${country}.`);
@@ -1997,6 +1997,8 @@
       const apiKey = getApiKey();
       const country = countrySelect.value;
       const startYear = startYearInput.value.trim() || "2000";
+      const previousCountry = appState.country;
+      const countryChanged = !!previousCountry && previousCountry !== country;
       const requestId = ++latestChartsRequestId;
 
       if (!apiKey) {
@@ -2013,6 +2015,11 @@
 
       setStatus(`Loading historical data and rebuilding projections for ${country}...`);
 
+      if (countryChanged) {
+        window.clearTimeout(projectionInputUpdateTimer);
+        clearCharts();
+      }
+
       try {
         const historical = await loadHistoricalData(country, startYear, apiKey);
         if (requestId !== latestChartsRequestId) return;
@@ -2023,7 +2030,7 @@
         appState.projection = reconcileProjectionModel(appState.projection, country, historical);
 
         renderProjectionTable();
-        await drawChartsFromState();
+        await drawChartsFromState({ preserveVisibility: !countryChanged });
 
         setStatus(
           `Showing ${country}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
@@ -2141,7 +2148,10 @@
     });
 
     apiKeyInput.addEventListener("change", scheduleCountriesLoad);
-    countrySelect.addEventListener("change", scheduleChartsLoad);
+    countrySelect.addEventListener("change", () => {
+      window.clearTimeout(projectionInputUpdateTimer);
+      scheduleChartsLoad();
+    });
     startYearInput.addEventListener("input", scheduleChartsLoad);
     startYearInput.addEventListener("change", scheduleChartsLoad);
 
