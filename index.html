@@ -151,7 +151,7 @@
 
     .projection-summary {
       display: grid;
-      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
       gap: 10px;
       margin-bottom: 14px;
     }
@@ -206,6 +206,21 @@
       z-index: 1;
     }
 
+    .projection-table th.group-cap,
+    .projection-table td.group-cap {
+      background: #f7fbff;
+    }
+
+    .projection-table th.group-cf,
+    .projection-table td.group-cf {
+      background: #fff9f0;
+    }
+
+    .projection-table th.group-gen,
+    .projection-table td.group-gen {
+      background: #f4fcf8;
+    }
+
     .projection-table td.num,
     .projection-table th.num {
       text-align: right;
@@ -217,6 +232,15 @@
       padding: 8px 10px;
       text-align: right;
       border-radius: 10px;
+      background: #fff;
+    }
+
+    .projection-table td.group-cap input[type="number"] {
+      background: #eef7ff;
+    }
+
+    .projection-table td.group-cf input[type="number"] {
+      background: #fff4df;
     }
 
     .projection-table input[readonly] {
@@ -379,21 +403,6 @@
 
       <div class="projection-grid">
         <div class="field span-4">
-          <label for="projectionMode">Capacity target mode</label>
-          <select id="projectionMode" disabled>
-            <option value="per-tech">Per technology targets</option>
-            <option value="total-only">Single total target, distributed by latest capacity shares</option>
-          </select>
-          <small>Choose whether 2030 capacity is entered row by row or only as a total.</small>
-        </div>
-
-        <div class="field span-4">
-          <label for="totalCapacityTarget">Total capacity target in 2030 (GW)</label>
-          <input id="totalCapacityTarget" type="number" step="0.1" min="0" disabled />
-          <small>Used directly in total-only mode. In per-technology mode it updates automatically from row totals.</small>
-        </div>
-
-        <div class="field span-4">
           <label>Projection year</label>
           <input type="number" value="2030" disabled />
           <small>This version fixes the forward projection endpoint at 2030.</small>
@@ -409,14 +418,6 @@
           <div class="summary-label">Latest historical generation year</div>
           <div class="summary-value" id="summaryGenerationYear">-</div>
         </div>
-        <div class="summary-box">
-          <div class="summary-label">Default total 2030 capacity target</div>
-          <div class="summary-value" id="summaryDefaultTarget">-</div>
-        </div>
-        <div class="summary-box">
-          <div class="summary-label">Average recent total generation growth used for default</div>
-          <div class="summary-value" id="summaryGrowth">-</div>
-        </div>
       </div>
 
       <div class="projection-table-wrap">
@@ -424,33 +425,39 @@
           <thead>
             <tr>
               <th>Technology</th>
-              <th class="num">Latest capacity (GW)</th>
-              <th class="num">2030 capacity target (GW)</th>
-              <th class="num">% change to 2030</th>
-              <th class="num">Latest capacity factor</th>
-              <th class="num">2030 capacity factor</th>
-              <th class="num">% change to 2030</th>
+              <th class="num group-cap">2024 capacity (GW)</th>
+              <th class="num group-cap">2030 capacity (GW)</th>
+              <th class="num group-cap">% change to 2030</th>
+              <th class="num group-cf">2024 capacity factor</th>
+              <th class="num group-cf">2030 capacity factor</th>
+              <th class="num group-cf">% change to 2030</th>
+              <th class="num group-gen">2025 generation (TWh)</th>
+              <th class="num group-gen">2030 generation (TWh)</th>
+              <th class="num group-gen">% change to 2030</th>
             </tr>
           </thead>
           <tbody id="projectionTableBody">
-            <tr><td colspan="7" class="muted-inline">Load a country to populate the projection table.</td></tr>
+            <tr><td colspan="10" class="muted-inline">Load a country to populate the projection table.</td></tr>
           </tbody>
           <tfoot>
             <tr>
               <td>TOTAL</td>
-              <td class="num" id="totalLatestCapacityCell">-</td>
-              <td class="num" id="totalTargetCapacityCell">-</td>
-              <td class="num" id="totalCapacityPctCell">-</td>
-              <td class="num">-</td>
-              <td class="num">-</td>
-              <td class="num">-</td>
+              <td class="num group-cap" id="totalLatestCapacityCell">-</td>
+              <td class="num group-cap" id="totalTargetCapacityCell">-</td>
+              <td class="num group-cap" id="totalCapacityPctCell">-</td>
+              <td class="num group-cf">-</td>
+              <td class="num group-cf">-</td>
+              <td class="num group-cf">-</td>
+              <td class="num group-gen" id="totalLatestGenerationCell">-</td>
+              <td class="num group-gen" id="totalTargetGenerationCell">-</td>
+              <td class="num group-gen" id="totalGenerationPctCell">-</td>
             </tr>
           </tfoot>
         </table>
       </div>
 
       <div class="projection-note" id="projectionNote">
-        Defaults follow the uploaded table spec: total 2030 capacity is estimated from the average year-on-year change in total generation over the latest up to 3 historical intervals, extended linearly to 2030, then distributed across technologies using latest capacity shares. In total-target mode, the 2030 total is also split across technologies using those latest capacity shares. Capacity factors default to each technology's latest observable implied value using the latest common year where both historical generation and capacity exist, and editable capacity factors are capped between 0 and 1. Generation projections are then scaled from a 2025-style anchor value so the projected path stays continuous without forcing the first projected year to equal the last historical year.
+        Edit the 2030 capacity and capacity factor assumptions row by row. Capacity factors are derived from the latest common historical year with both capacity and generation data, capped between 0 and 1, and can be edited directly. Capacity is linearly interpolated to 2030, and generation is then calculated from projected capacity and projected capacity factors while staying visually continuous with the latest historical generation year.
       </div>
     </section>
 
@@ -537,17 +544,16 @@
     const generationMetaEl = document.getElementById("generationMeta");
     const capacityMetaEl = document.getElementById("capacityMeta");
 
-    const projectionModeEl = document.getElementById("projectionMode");
-    const totalCapacityTargetEl = document.getElementById("totalCapacityTarget");
     const resetProjectionBtn = document.getElementById("resetProjectionBtn");
     const projectionTableBody = document.getElementById("projectionTableBody");
     const summaryCapacityYearEl = document.getElementById("summaryCapacityYear");
     const summaryGenerationYearEl = document.getElementById("summaryGenerationYear");
-    const summaryDefaultTargetEl = document.getElementById("summaryDefaultTarget");
-    const summaryGrowthEl = document.getElementById("summaryGrowth");
     const totalLatestCapacityCell = document.getElementById("totalLatestCapacityCell");
     const totalTargetCapacityCell = document.getElementById("totalTargetCapacityCell");
     const totalCapacityPctCell = document.getElementById("totalCapacityPctCell");
+    const totalLatestGenerationCell = document.getElementById("totalLatestGenerationCell");
+    const totalTargetGenerationCell = document.getElementById("totalTargetGenerationCell");
+    const totalGenerationPctCell = document.getElementById("totalGenerationPctCell");
 
     let countriesLoadedForKey = null;
     let loadCountriesTimer = null;
@@ -1110,15 +1116,73 @@
       return projection.rows.reduce((sum, row) => sum + Number(row.latestCapacity || 0), 0);
     }
 
+    function latestDisplayedGenerationValue(row, historical) {
+      const latestGenerationYear = historical?.generation?.latestYear;
+      if (Number.isFinite(latestGenerationYear)) {
+        const value = Number(historical.generation.valuesBySeries.get(row.technology)?.get(latestGenerationYear));
+        if (Number.isFinite(value)) return value;
+      }
+      return Number(row.latestGeneration || 0);
+    }
+
+    function projectedGenerationTarget2030(row, projection, historical) {
+      const generationHistory = historical?.generation;
+      if (!generationHistory || !Number.isFinite(generationHistory.latestYear)) return 0;
+
+      const capBaseYear = Number.isFinite(Number(row.latestCapacityYear))
+        ? Number(row.latestCapacityYear)
+        : generationHistory.latestYear;
+      const cfBaseYear = Number.isFinite(Number(row.latestCfYear))
+        ? Number(row.latestCfYear)
+        : capBaseYear;
+
+      const capStartValue = Number(row.latestCapacity || 0);
+      const capTarget = getEffectiveCapTarget(row, projection);
+      const cfStart = Number.isFinite(row.latestCf) ? Number(row.latestCf) : 0;
+      const cfTarget = getEffectiveCfTarget(row);
+
+      const raw2030 = Math.max(0, interpolateLinearToTarget(capBaseYear, capStartValue, capTarget, TARGET_YEAR))
+        * clamp(interpolateLinearToTarget(cfBaseYear, cfStart, cfTarget, TARGET_YEAR), 0, 1)
+        * 8.76;
+
+      const anchorYear = generationHistory.latestYear;
+      const anchorValue = Number(generationHistory.valuesBySeries.get(row.technology)?.get(anchorYear) ?? 0);
+      const anchorCap = interpolateLinearToTarget(capBaseYear, capStartValue, capTarget, anchorYear);
+      const anchorCf = interpolateLinearToTarget(cfBaseYear, cfStart, cfTarget, anchorYear);
+      const anchorProjectedValue = Math.max(0, anchorCap) * clamp(anchorCf, 0, 1) * 8.76;
+
+      let scaleFactor = 1;
+      if (anchorProjectedValue > 0) {
+        scaleFactor = Math.max(0, anchorValue) / anchorProjectedValue;
+      } else if (anchorValue === 0) {
+        scaleFactor = 1;
+      } else {
+        scaleFactor = 0;
+      }
+
+      return Math.max(0, raw2030 * scaleFactor);
+    }
+
+    function generationPctChange(row, projection, historical) {
+      const latest = latestDisplayedGenerationValue(row, historical);
+      const target = projectedGenerationTarget2030(row, projection, historical);
+      if (!Number.isFinite(latest) || latest === 0) {
+        return target === 0 ? 0 : null;
+      }
+      return ((target / latest) - 1) * 100;
+    }
+
+    function totalLatestGeneration(projection, historical) {
+      return projection.rows.reduce((sum, row) => sum + latestDisplayedGenerationValue(row, historical), 0);
+    }
+
+    function totalTargetGeneration(projection, historical) {
+      return projection.rows.reduce((sum, row) => sum + projectedGenerationTarget2030(row, projection, historical), 0);
+    }
+
     function renderProjectionSummary(historical, projection) {
       summaryCapacityYearEl.textContent = historical.capacity.latestYear ?? "-";
       summaryGenerationYearEl.textContent = historical.generation.latestYear ?? "-";
-      summaryDefaultTargetEl.textContent = Number.isFinite(projection.defaultTotalCapacityTarget)
-        ? `${fmtNumber(projection.defaultTotalCapacityTarget, 1)} GW`
-        : "-";
-      summaryGrowthEl.textContent = Number.isFinite(projection.avgRecentGrowth)
-        ? fmtPercent(projection.avgRecentGrowth * 100, 1)
-        : "-";
 
       const latestTotal = totalLatestCapacity(projection);
       const targetTotal = totalEffectiveCapacityTarget(projection);
@@ -1126,6 +1190,13 @@
       totalTargetCapacityCell.textContent = `${fmtNumber(targetTotal, 1)} GW`;
       const totalPct = latestTotal > 0 ? ((targetTotal / latestTotal) - 1) * 100 : null;
       totalCapacityPctCell.textContent = Number.isFinite(totalPct) ? fmtPercent(totalPct, 1) : "-";
+
+      const latestGenerationTotal = totalLatestGeneration(projection, historical);
+      const targetGenerationTotal = totalTargetGeneration(projection, historical);
+      totalLatestGenerationCell.textContent = `${fmtNumber(latestGenerationTotal, 1)} TWh`;
+      totalTargetGenerationCell.textContent = `${fmtNumber(targetGenerationTotal, 1)} TWh`;
+      const totalGenerationPct = latestGenerationTotal > 0 ? ((targetGenerationTotal / latestGenerationTotal) - 1) * 100 : null;
+      totalGenerationPctCell.textContent = Number.isFinite(totalGenerationPct) ? fmtPercent(totalGenerationPct, 1) : "-";
     }
 
     function renderProjectionTable() {
@@ -1133,48 +1204,42 @@
       const historical = appState.historical;
 
       if (!projection || !historical) {
-        projectionTableBody.innerHTML = '<tr><td colspan="7" class="muted-inline">Load a country to populate the projection table.</td></tr>';
-        projectionModeEl.disabled = true;
-        totalCapacityTargetEl.disabled = true;
+        projectionTableBody.innerHTML = '<tr><td colspan="10" class="muted-inline">Load a country to populate the projection table.</td></tr>';
         resetProjectionBtn.disabled = true;
         return;
       }
 
-      projectionModeEl.disabled = false;
-      totalCapacityTargetEl.disabled = projection.mode !== "total-only";
       resetProjectionBtn.disabled = false;
-
-      projectionModeEl.value = projection.mode;
-      totalCapacityTargetEl.value = fmtNumber(
-        projection.mode === "total-only" ? projection.totalCapacityTarget2030 : totalEffectiveCapacityTarget(projection),
-        1
-      );
 
       projectionTableBody.innerHTML = projection.rows.map((row, index) => {
         const capTarget = getEffectiveCapTarget(row, projection);
         const capPct = capacityPctChange(row, projection);
         const cfTarget = getEffectiveCfTarget(row);
         const cfPct = cfPctChange(row);
-        const capReadonly = projection.mode === "total-only" ? "readonly" : "";
-        const capDisabledHint = projection.mode === "total-only" ? "title=\"Calculated from total target and latest shares\"" : "";
+        const latestGeneration = latestDisplayedGenerationValue(row, historical);
+        const generation2030 = projectedGenerationTarget2030(row, projection, historical);
+        const genPct = generationPctChange(row, projection, historical);
 
         return `
           <tr data-row-index="${index}">
             <td>${row.technology}</td>
-            <td class="num">${fmtNumber(row.latestCapacity, 1)}</td>
-            <td class="num">
-              <input type="number" step="0.1" min="0" data-input-type="cap-target" data-row-index="${index}" value="${Number.isFinite(capTarget) ? capTarget.toFixed(1) : 0}" ${capReadonly} ${capDisabledHint} />
+            <td class="num group-cap">${fmtNumber(row.latestCapacity, 1)}</td>
+            <td class="num group-cap">
+              <input type="number" step="0.1" min="0" data-input-type="cap-target" data-row-index="${index}" value="${Number.isFinite(capTarget) ? capTarget.toFixed(1) : 0}" />
             </td>
-            <td class="num">
-              <input type="number" step="0.1" data-input-type="cap-pct" data-row-index="${index}" value="${Number.isFinite(capPct) ? capPct.toFixed(1) : 0}" ${capReadonly} ${capDisabledHint} />
+            <td class="num group-cap">
+              <input type="number" step="0.1" data-input-type="cap-pct" data-row-index="${index}" value="${Number.isFinite(capPct) ? capPct.toFixed(1) : 0}" />
             </td>
-            <td class="num">${Number.isFinite(row.latestCf) ? fmtNumber(row.latestCf, 3) : "-"}</td>
-            <td class="num">
+            <td class="num group-cf">${Number.isFinite(row.latestCf) ? fmtNumber(row.latestCf, 3) : "-"}</td>
+            <td class="num group-cf">
               <input type="number" step="0.01" min="0" max="1" data-input-type="cf-target" data-row-index="${index}" value="${Number.isFinite(cfTarget) ? cfTarget.toFixed(3) : 0}" />
             </td>
-            <td class="num">
+            <td class="num group-cf">
               <input type="number" step="0.1" data-input-type="cf-pct" data-row-index="${index}" value="${Number.isFinite(cfPct) ? cfPct.toFixed(1) : 0}" />
             </td>
+            <td class="num group-gen">${fmtNumber(latestGeneration, 1)}</td>
+            <td class="num group-gen">${fmtNumber(generation2030, 1)}</td>
+            <td class="num group-gen">${Number.isFinite(genPct) ? fmtPercent(genPct, 1) : "-"}</td>
           </tr>
         `;
       }).join("");
@@ -1608,15 +1673,13 @@
       const value = parseEditableNumber(rawValue);
       if (value === null) return false;
 
-      if (inputType === "cap-target" && projection.mode !== "total-only") {
+      if (inputType === "cap-target") {
         row.capTargetManual = Math.max(0, value);
-        projection.totalCapacityTarget2030 = totalEffectiveCapacityTarget(projection);
       }
 
-      if (inputType === "cap-pct" && projection.mode !== "total-only") {
+      if (inputType === "cap-pct") {
         const latest = Number(row.latestCapacity || 0);
         row.capTargetManual = Math.max(0, latest * (1 + (value / 100)));
-        projection.totalCapacityTarget2030 = totalEffectiveCapacityTarget(projection);
       }
 
       if (inputType === "cf-target") {
@@ -1639,33 +1702,6 @@
       return true;
     }
 
-    projectionModeEl.addEventListener("change", () => {
-      if (!appState.projection) return;
-      appState.projection.mode = projectionModeEl.value;
-      if (appState.projection.mode === "per-tech") {
-        appState.projection.totalCapacityTarget2030 = totalEffectiveCapacityTarget(appState.projection);
-      }
-      renderProjectionTable();
-      drawChartsFromState();
-    });
-
-    totalCapacityTargetEl.addEventListener("input", () => {
-      if (!appState.projection) return;
-      const value = parseEditableNumber(totalCapacityTargetEl.value);
-      if (value === null) return;
-      appState.projection.totalCapacityTarget2030 = Math.max(0, value);
-      renderProjectionSummary(appState.historical, appState.projection);
-      scheduleProjectionVisualUpdate(450);
-    });
-
-    totalCapacityTargetEl.addEventListener("change", () => {
-      if (!appState.projection) return;
-      const value = parseEditableNumber(totalCapacityTargetEl.value);
-      if (value === null) return;
-      appState.projection.totalCapacityTarget2030 = Math.max(0, value);
-      window.clearTimeout(projectionInputUpdateTimer);
-      refreshProjectionVisuals({ rerenderTable: true });
-    });
 
     resetProjectionBtn.addEventListener("click", async () => {
       if (!appState.country || !appState.historical) return;
