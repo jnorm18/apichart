@@ -601,6 +601,7 @@
 
     let appState = {
       country: null,
+      countryEntity: null,
       startYear: null,
       historical: null,
       projection: null
@@ -712,6 +713,15 @@
         localStorage.removeItem(STORAGE_KEY);
       }
       return key;
+    }
+
+    function getSelectedCountryContext() {
+      const selectedOption = countrySelect.selectedOptions && countrySelect.selectedOptions[0]
+        ? countrySelect.selectedOptions[0]
+        : null;
+      const entityValue = String(countrySelect.value || "").trim();
+      const displayLabel = String(selectedOption?.textContent || entityValue).trim();
+      return { entityValue, displayLabel };
     }
 
     function clearChart(chartEl) {
@@ -1035,10 +1045,13 @@
       };
     }
 
-    function transformCapacityRows(rows, country, startYear) {
+    function transformCapacityRows(rows, countryLabel, countryEntity, startYear) {
       const startYearNum = Number(startYear);
+      const wantedLabel = String(countryLabel || "").trim().toLowerCase();
+      const wantedEntity = String(countryEntity || "").trim().toUpperCase();
       const filteredRows = rows.filter((row) => {
         const area = String(row.Area || row.area || "").trim();
+        const iso3 = String(row["ISO 3 code"] || row["ISO3"] || row.iso3 || row.iso_3_code || row.iso_3 || "").trim();
         const year = Number(row.Year || row.year);
         const category = String(row.Category || row.category || "").trim();
         const subcategory = String(row.Subcategory || row.subcategory || "").trim();
@@ -1046,7 +1059,11 @@
         const variable = normaliseSeriesName(row.Variable || row.variable || "");
         const value = Number(row.Value || row.value);
 
-        if (!area || area !== country) return false;
+        const areaMatch = area && wantedLabel && area.toLowerCase() === wantedLabel;
+        const entityAsLabelMatch = area && wantedEntity && area.toUpperCase() === wantedEntity;
+        const isoMatch = iso3 && wantedEntity && iso3.toUpperCase() === wantedEntity;
+
+        if (!(areaMatch || entityAsLabelMatch || isoMatch)) return false;
         if (!Number.isFinite(year) || year < startYearNum) return false;
         if (!variable) return false;
         if (!Number.isFinite(value)) return false;
@@ -1901,10 +1918,10 @@
       }
     }
 
-    async function loadHistoricalData(country, startYear, apiKey) {
+    async function loadHistoricalData(countryEntity, countryLabel, startYear, apiKey) {
       const [generationPayload, capacityRows] = await Promise.all([
         fetchJson("/electricity-generation/yearly", {
-          entity: country,
+          entity: countryEntity,
           start_date: startYear,
           is_aggregate_series: false,
           include_all_dates_value_range: true,
@@ -1915,14 +1932,14 @@
 
       const generationRows = Array.isArray(generationPayload?.data) ? generationPayload.data : [];
       if (!generationRows.length) {
-        throw new Error(`No generation rows were returned for ${country}.`);
+        throw new Error(`No generation rows were returned for ${countryLabel}.`);
       }
 
       const generation = transformGenerationRows(generationRows);
-      const capacity = transformCapacityRows(capacityRows, country, startYear);
+      const capacity = transformCapacityRows(capacityRows, countryLabel, countryEntity, startYear);
 
       if (!capacity.rowCount) {
-        throw new Error(`No local yearly capacity rows matched ${country}. Check the country names in your CSV.`);
+        throw new Error(`No local yearly capacity rows matched ${countryLabel} (${countryEntity}). Check whether your CSV Area or ISO 3 code values align with the dropdown.`);
       }
 
       return { generation, capacity };
@@ -1995,10 +2012,10 @@
 
     async function loadCharts() {
       const apiKey = getApiKey();
-      const country = countrySelect.value;
+      const { entityValue: countryEntity, displayLabel: countryLabel } = getSelectedCountryContext();
       const startYear = startYearInput.value.trim() || "2000";
-      const previousCountry = appState.country;
-      const countryChanged = !!previousCountry && previousCountry !== country;
+      const previousCountryEntity = appState.countryEntity;
+      const countryChanged = !!previousCountryEntity && previousCountryEntity !== countryEntity;
       const requestId = ++latestChartsRequestId;
 
       if (!apiKey) {
@@ -2007,13 +2024,13 @@
         return;
       }
 
-      if (!country) {
+      if (!countryEntity) {
         clearCharts();
         setStatus("Choose a country or region.");
         return;
       }
 
-      setStatus(`Loading historical data and rebuilding projections for ${country}...`);
+      setStatus(`Loading historical data and rebuilding projections for ${countryLabel}...`);
 
       if (countryChanged) {
         window.clearTimeout(projectionInputUpdateTimer);
@@ -2021,19 +2038,20 @@
       }
 
       try {
-        const historical = await loadHistoricalData(country, startYear, apiKey);
+        const historical = await loadHistoricalData(countryEntity, countryLabel, startYear, apiKey);
         if (requestId !== latestChartsRequestId) return;
 
-        appState.country = country;
+        appState.country = countryLabel;
+        appState.countryEntity = countryEntity;
         appState.startYear = startYear;
         appState.historical = historical;
-        appState.projection = reconcileProjectionModel(appState.projection, country, historical);
+        appState.projection = reconcileProjectionModel(appState.projection, countryLabel, historical);
 
         renderProjectionTable();
         await drawChartsFromState({ preserveVisibility: !countryChanged });
 
         setStatus(
-          `Showing ${country}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
+          `Showing ${countryLabel}. Generation: ${historical.generation.rowCount} non-aggregate records. ` +
           `Capacity: ${historical.capacity.rowCount} yearly rows. Projection now extends the main charts to ${TARGET_YEAR}, with linked capacity factor and additions / retirements charts below.`
         );
       } catch (error) {
