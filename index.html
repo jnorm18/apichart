@@ -598,6 +598,20 @@
     let capacityLookupPromise = null;
     let projectionInputUpdateTimer = null;
 
+    const CHART_KEYS = {
+      generation: "generation",
+      capacity: "capacity",
+      capacityFactor: "capacityFactor",
+      additions: "additions"
+    };
+
+    let chartLegendVisibility = {
+      [CHART_KEYS.generation]: new Map(),
+      [CHART_KEYS.capacity]: new Map(),
+      [CHART_KEYS.capacityFactor]: new Map(),
+      [CHART_KEYS.additions]: new Map()
+    };
+
     let appState = {
       country: null,
       countryEntity: null,
@@ -959,6 +973,101 @@
         displaylogo: false,
         modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toggleSpikelines"]
       };
+    }
+
+    function getChartLegendVisibility(chartKey) {
+      if (!chartLegendVisibility[chartKey]) {
+        chartLegendVisibility[chartKey] = new Map();
+      }
+      return chartLegendVisibility[chartKey];
+    }
+
+    function setChartSeriesVisibility(chartKey, seriesName, isVisible) {
+      if (!seriesName) return;
+      getChartLegendVisibility(chartKey).set(seriesName, Boolean(isVisible));
+    }
+
+    function getTopGenerationSeries(limit = 4, allowedSeries = []) {
+      const generation = appState.historical?.generation;
+      const candidateSeries = Array.isArray(allowedSeries) && allowedSeries.length
+        ? allowedSeries
+        : Array.from(new Set(generation?.seriesNames || []));
+
+      if (!candidateSeries.length) return new Set();
+
+      const ranked = candidateSeries
+        .map((name) => ({
+          name,
+          value: Number(getLatestValueForSeries(generation, name).value || 0)
+        }))
+        .sort((a, b) => b.value - a.value || seriesSortKey(a.name) - seriesSortKey(b.name) || a.name.localeCompare(b.name));
+
+      const positiveTop = ranked.filter((item) => item.value > 0).slice(0, limit);
+      const fallbackTop = ranked.slice(0, limit);
+      return new Set((positiveTop.length ? positiveTop : fallbackTop).map((item) => item.name));
+    }
+
+    function applyLegendVisibilityToTraces(chartKey, traces, { defaultVisibleSeries = null } = {}) {
+      const storedVisibility = getChartLegendVisibility(chartKey);
+      const groupVisibility = new Map();
+
+      traces.forEach((trace) => {
+        const group = trace.legendgroup || trace.name;
+        if (!group || groupVisibility.has(group)) return;
+
+        const stored = storedVisibility.has(group) ? storedVisibility.get(group) : null;
+        const shouldShow = stored !== null
+          ? stored
+          : (defaultVisibleSeries instanceof Set ? defaultVisibleSeries.has(group) : true);
+
+        groupVisibility.set(group, shouldShow);
+      });
+
+      traces.forEach((trace) => {
+        const group = trace.legendgroup || trace.name;
+        if (!group) return;
+        const shouldShow = groupVisibility.get(group);
+        trace.visible = shouldShow ? true : (trace.showlegend === false ? false : "legendonly");
+      });
+
+      return traces;
+    }
+
+    function bindLegendVisibilityHandlers(chartEl, chartKey) {
+      if (chartEl.dataset.legendVisibilityBound === "1") return;
+
+      chartEl.on("plotly_legendclick", (event) => {
+        const traces = event?.data || chartEl.data || [];
+        const clickedTrace = traces[event.curveNumber];
+        const group = clickedTrace?.legendgroup || clickedTrace?.name;
+        if (!group) return false;
+
+        const groupIndexes = [];
+        traces.forEach((trace, index) => {
+          if ((trace.legendgroup || trace.name) === group) {
+            groupIndexes.push(index);
+          }
+        });
+
+        const anyVisible = groupIndexes.some((index) => {
+          const visible = traces[index].visible;
+          return visible === undefined || visible === true;
+        });
+
+        const nextVisible = !anyVisible;
+        setChartSeriesVisibility(chartKey, group, nextVisible);
+
+        const nextValues = groupIndexes.map((index) => {
+          const trace = traces[index];
+          return nextVisible ? true : (trace.showlegend === false ? false : "legendonly");
+        });
+
+        Plotly.restyle(chartEl, { visible: nextValues }, groupIndexes);
+        return false;
+      });
+
+      chartEl.on("plotly_legenddoubleclick", () => false);
+      chartEl.dataset.legendVisibilityBound = "1";
     }
 
     function baseLayout(titleText, subtitleText, historicalLatestYear) {
@@ -1783,7 +1892,8 @@
 
       return {
         traces,
-        latestHistoricalYear: cfHistorical.latestYear
+        latestHistoricalYear: cfHistorical.latestYear,
+        seriesNames
       };
     }
 
@@ -1969,14 +2079,15 @@
       if (!generationHist.seriesNames.length) {
         showChartMessage(generationChartEl, `No usable generation series were returned for ${country}.`);
       } else {
-        const generationTraces = buildStackedAreaTraces({
+        const generationTraces = applyLegendVisibilityToTraces(CHART_KEYS.generation, buildStackedAreaTraces({
           historical: generationHist,
           projection: "generation",
           valueSuffix: "TWh",
           decimals: 1
-        });
+        }));
         const generationLayout = baseLayout(`Electricity generation in ${country}`, "Terawatt-hours", generationHist.latestYear);
         await Plotly.react(generationChartEl, generationTraces, generationLayout, commonChartConfig());
+        bindLegendVisibilityHandlers(generationChartEl, CHART_KEYS.generation);
         generationMetaEl.textContent = generationHist.latestYear < TARGET_YEAR
           ? `Latest historical year: ${generationHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
           : `Latest historical year: ${generationHist.latestYear}.`;
@@ -1985,14 +2096,15 @@
       if (!capacityHist.seriesNames.length) {
         showChartMessage(capacityChartEl, `No usable capacity series were found for ${country}.`);
       } else {
-        const capacityTraces = buildStackedAreaTraces({
+        const capacityTraces = applyLegendVisibilityToTraces(CHART_KEYS.capacity, buildStackedAreaTraces({
           historical: capacityHist,
           projection: "capacity",
           valueSuffix: "GW",
           decimals: 2
-        });
+        }));
         const capacityLayout = baseLayout(`Installed capacity in ${country}`, "Gigawatts", capacityHist.latestYear);
         await Plotly.react(capacityChartEl, capacityTraces, capacityLayout, commonChartConfig());
+        bindLegendVisibilityHandlers(capacityChartEl, CHART_KEYS.capacity);
         capacityMetaEl.textContent = capacityHist.latestYear < TARGET_YEAR
           ? `Latest historical year: ${capacityHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
           : `Latest historical year: ${capacityHist.latestYear}.`;
@@ -2002,27 +2114,34 @@
       if (!cfData.traces.length) {
         showChartMessage(capacityFactorChartEl, `No capacity factor series could be derived for ${country}.`);
       } else {
+        const cfDefaultVisibleSeries = getTopGenerationSeries(4, cfData.seriesNames);
+        const cfTraces = applyLegendVisibilityToTraces(CHART_KEYS.capacityFactor, cfData.traces, {
+          defaultVisibleSeries: cfDefaultVisibleSeries
+        });
         const cfLayout = baseLayout(`Capacity factor in ${country}`, "Historical values use average start- and end-year capacity. Projection follows the editable capacity factor assumptions.", cfData.latestHistoricalYear);
         cfLayout.yaxis.tickformat = ".0%";
         cfLayout.yaxis.range = [0, null];
         cfLayout.legend.traceorder = "normal";
         cfLayout.margin = { l: 62, r: 18, t: 94, b: 48 };
-        await Plotly.react(capacityFactorChartEl, cfData.traces, cfLayout, commonChartConfig());
+        await Plotly.react(capacityFactorChartEl, cfTraces, cfLayout, commonChartConfig());
+        bindLegendVisibilityHandlers(capacityFactorChartEl, CHART_KEYS.capacityFactor);
         capacityFactorMetaEl.textContent = Number.isFinite(cfData.latestHistoricalYear)
-          ? `Latest historical capacity factor year: ${cfData.latestHistoricalYear}. Historical values use a midyear capacity assumption. Projected values interpolate the user-edited capacity factors to ${TARGET_YEAR}.`
-          : `Projected values interpolate the user-edited capacity factors to ${TARGET_YEAR}.`;
+          ? `Latest historical capacity factor year: ${cfData.latestHistoricalYear}. Historical values use a midyear capacity assumption. Projected values interpolate the user-edited capacity factors to ${TARGET_YEAR}. By default, only the four largest generation sources are shown.`
+          : `Projected values interpolate the user-edited capacity factors to ${TARGET_YEAR}. By default, only the four largest generation sources are shown.`;
       }
 
       const additionsData = buildAdditionsBarTraces();
       if (!additionsData.traces.length) {
         showChartMessage(additionsChartEl, `No annual additions or retirements series could be derived for ${country}.`);
       } else {
+        const additionsTraces = applyLegendVisibilityToTraces(CHART_KEYS.additions, additionsData.traces);
         const additionsLayout = baseLayout(`Annual net capacity additions / retirements in ${country}`, "Positive bars show additions. Negative bars show retirements. Projected years follow the editable 2030 capacity assumptions.", additionsData.latestHistoricalYear);
         additionsLayout.barmode = "relative";
         additionsLayout.bargap = 0.15;
         additionsLayout.legend.traceorder = "normal";
         additionsLayout.margin = { l: 62, r: 18, t: 94, b: 48 };
-        await Plotly.react(additionsChartEl, additionsData.traces, additionsLayout, commonChartConfig());
+        await Plotly.react(additionsChartEl, additionsTraces, additionsLayout, commonChartConfig());
+        bindLegendVisibilityHandlers(additionsChartEl, CHART_KEYS.additions);
         additionsMetaEl.textContent = `Year-on-year change in installed capacity by technology. Historical bars run through ${capacityHist.latestYear}; projected bars start in ${capacityHist.latestYear + 1}.`;
       }
     }
