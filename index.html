@@ -1305,6 +1305,18 @@
     }
 
     function renderProjectionSummary(historical, projection) {
+      if (!historical || !projection) {
+        summaryCapacityYearEl.textContent = "-";
+        summaryGenerationYearEl.textContent = "-";
+        totalLatestCapacityCell.textContent = "-";
+        totalTargetCapacityCell.textContent = "-";
+        totalCapacityPctCell.textContent = "-";
+        totalLatestGenerationCell.textContent = "-";
+        totalTargetGenerationCell.textContent = "-";
+        totalGenerationPctCell.textContent = "-";
+        return;
+      }
+
       summaryCapacityYearEl.textContent = historical.capacity.latestYear ?? "-";
       summaryGenerationYearEl.textContent = historical.generation.latestYear ?? "-";
 
