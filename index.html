@@ -286,7 +286,7 @@
     }
 
     .chart-small {
-      min-height: 340px;
+      min-height: 510px;
     }
 
     .chart-empty {
@@ -362,7 +362,7 @@
     @media (max-width: 900px) {
       .span-6, .span-4, .span-3 { grid-column: span 12; }
       .chart-large { min-height: 440px; }
-      .chart-small { min-height: 320px; }
+      .chart-small { min-height: 480px; }
       .projection-summary { grid-template-columns: 1fr; }
     }
   </style>
@@ -519,6 +519,8 @@
     const DEFAULT_COUNTRY = "China";
     const CAPACITY_DATA_PATH = "./data/capacity_yearly.csv";
     const TARGET_YEAR = 2030;
+    const PROJECTED_FILL_ALPHA = 0.72;
+    const PROJECTED_BAND_ALPHA = 0.12;
 
     const SERIES_ORDER = [
       "Other fossil",
@@ -803,7 +805,8 @@
           y: -0.16,
           yanchor: "top",
           traceorder: "reversed",
-          font: { size: 11 }
+          font: { size: 11 },
+          groupclick: "togglegroup"
         },
         xaxis: {
           title: "",
@@ -832,7 +835,7 @@
             x1: TARGET_YEAR + 0.5,
             y0: 0,
             y1: 1,
-            fillcolor: "rgba(100, 116, 139, 0.08)",
+            fillcolor: `rgba(100, 116, 139, ${PROJECTED_BAND_ALPHA})`,
             line: { width: 0 }
           },
           {
@@ -894,6 +897,60 @@
 
     function twhPerGwYear(year) {
       return hoursInYear(year) / 1000;
+    }
+
+    function traceStateKey(trace, index = 0) {
+      return trace?.legendgroup || trace?.name || trace?.uid || `trace-${index}`;
+    }
+
+    function visibleStateValue(trace) {
+      return trace?.visible === "legendonly" || trace?.visible === false ? "legendonly" : true;
+    }
+
+    function captureVisibilityState(chartEl) {
+      if (!chartEl || !Array.isArray(chartEl.data)) return null;
+      const state = new Map();
+      chartEl.data.forEach((trace, index) => {
+        const key = traceStateKey(trace, index);
+        const value = visibleStateValue(trace);
+        if (!state.has(key) || trace.showlegend !== false) {
+          state.set(key, value);
+        }
+      });
+      return state;
+    }
+
+    function applyTraceUiState(traces, chartType, visibilityState = null, defaultVisibleSet = null) {
+      traces.forEach((trace, index) => {
+        const key = traceStateKey(trace, index);
+        const lineDash = trace?.line?.dash || "solid";
+        const fillMode = trace?.fill || "none";
+        const showlegend = trace.showlegend === false ? "secondary" : "primary";
+        trace.uid = `${chartType}|${key}|${trace.type || "trace"}|${showlegend}|${fillMode}|${lineDash}`;
+
+        if (visibilityState && visibilityState.has(key)) {
+          trace.visible = visibilityState.get(key);
+        } else if (defaultVisibleSet instanceof Set) {
+          trace.visible = defaultVisibleSet.has(key) ? true : "legendonly";
+        }
+      });
+    }
+
+    function getDefaultCapacityFactorVisibleSet(limit = 4) {
+      const generation = appState.historical?.generation;
+      const latestYear = generation?.latestYear;
+      const seriesNames = generation?.seriesNames || [];
+
+      const ranked = seriesNames
+        .map((name) => ({
+          name,
+          value: Number(generation.valuesBySeries.get(name)?.get(latestYear) ?? 0)
+        }))
+        .sort((a, b) => (b.value - a.value) || (seriesSortKey(a.name) - seriesSortKey(b.name)) || a.name.localeCompare(b.name))
+        .slice(0, limit)
+        .map((item) => item.name);
+
+      return new Set(ranked);
     }
 
     function getLatestValueForSeries(transformed, seriesName) {
@@ -1633,7 +1690,7 @@
             x: projYears,
             y: projValues,
             marker: {
-              color: hexToRgba(seriesColor(name), 0.45),
+              color: hexToRgba(seriesColor(name), PROJECTED_FILL_ALPHA),
               line: { width: 0 }
             },
             hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{y:.2f} GW<extra></extra>`
@@ -1757,7 +1814,7 @@
             color: seriesColor(name),
             dash: "dash"
           },
-          fillcolor: hexToRgba(seriesColor(name), 0.45),
+          fillcolor: hexToRgba(seriesColor(name), PROJECTED_FILL_ALPHA),
           customdata: projectedSeriesWithAnchor,
           hovertemplate: `%{fullData.name} (projected)<br>%{x}: %{customdata:.${decimals}f} ${valueSuffix}<extra></extra>`
         });
@@ -1774,6 +1831,10 @@
       const country = appState.country;
       const generationHist = appState.historical.generation;
       const capacityHist = appState.historical.capacity;
+      const generationVisibility = captureVisibilityState(generationChartEl);
+      const capacityVisibility = captureVisibilityState(capacityChartEl);
+      const capacityFactorVisibility = captureVisibilityState(capacityFactorChartEl);
+      const additionsVisibility = captureVisibilityState(additionsChartEl);
 
       if (!generationHist.seriesNames.length) {
         showChartMessage(generationChartEl, `No usable generation series were returned for ${country}.`);
@@ -1784,7 +1845,9 @@
           valueSuffix: "TWh",
           decimals: 1
         });
+        applyTraceUiState(generationTraces, "generation", generationVisibility);
         const generationLayout = baseLayout(`Electricity generation in ${country}`, "Terawatt-hours", generationHist.latestYear);
+        generationLayout.uirevision = `${country}|generation`;
         await Plotly.react(generationChartEl, generationTraces, generationLayout, commonChartConfig());
         generationMetaEl.textContent = generationHist.latestYear < TARGET_YEAR
           ? `Latest historical year: ${generationHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
@@ -1800,7 +1863,9 @@
           valueSuffix: "GW",
           decimals: 2
         });
+        applyTraceUiState(capacityTraces, "capacity", capacityVisibility);
         const capacityLayout = baseLayout(`Installed capacity in ${country}`, "Gigawatts", capacityHist.latestYear);
+        capacityLayout.uirevision = `${country}|capacity`;
         await Plotly.react(capacityChartEl, capacityTraces, capacityLayout, commonChartConfig());
         capacityMetaEl.textContent = capacityHist.latestYear < TARGET_YEAR
           ? `Latest historical year: ${capacityHist.latestYear}. Projection extends to ${TARGET_YEAR}.`
@@ -1811,7 +1876,9 @@
       if (!cfData.traces.length) {
         showChartMessage(capacityFactorChartEl, `No capacity factor series could be derived for ${country}.`);
       } else {
+        applyTraceUiState(cfData.traces, "capacity-factor", capacityFactorVisibility, getDefaultCapacityFactorVisibleSet(4));
         const cfLayout = baseLayout(`Capacity factor in ${country}`, "Historical values use average start- and end-year capacity. Projection follows the editable capacity factor assumptions.", cfData.latestHistoricalYear);
+        cfLayout.uirevision = `${country}|capacity-factor`;
         cfLayout.yaxis.tickformat = ".0%";
         cfLayout.yaxis.range = [0, null];
         cfLayout.legend.traceorder = "normal";
@@ -1826,7 +1893,9 @@
       if (!additionsData.traces.length) {
         showChartMessage(additionsChartEl, `No annual additions or retirements series could be derived for ${country}.`);
       } else {
+        applyTraceUiState(additionsData.traces, "additions", additionsVisibility);
         const additionsLayout = baseLayout(`Annual capacity additions / retirements in ${country}`, "Positive bars show additions. Negative bars show retirements. Projected years follow the editable 2030 capacity assumptions.", additionsData.latestHistoricalYear);
+        additionsLayout.uirevision = `${country}|additions`;
         additionsLayout.barmode = "relative";
         additionsLayout.bargap = 0.15;
         additionsLayout.legend.traceorder = "normal";
